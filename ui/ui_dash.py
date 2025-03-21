@@ -834,14 +834,18 @@ app.clientside_callback(
 # Add client-side callback for question buttons to show loading immediately
 app.clientside_callback(
     """
-    function(n_clicks, _) {
-        console.log("Question button clicked, showing loading indicator");
+    function(n_clicks_list, _) {
+        console.log("Question button clicked, checking which one", n_clicks_list);
         
-        if (n_clicks > 0) {
+        // Check if any button has been clicked
+        if (n_clicks_list && n_clicks_list.some(clicks => clicks > 0)) {
+            console.log("Question button was clicked, showing loading indicator");
+            
             // Get the loading element and show it immediately
             var loadingElement = document.getElementById('loading-indicator');
             if (loadingElement) {
                 loadingElement.style.display = 'block';
+                console.log("Set loading indicator display to block from question button");
             }
         }
         return window.dash_clientside.no_update;
