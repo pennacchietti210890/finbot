@@ -165,13 +165,16 @@ app.index_string = """
             
             /* Loading Container */
             .loading-container {
-                display: none;
-                position: absolute;
+                z-index: 9999;
+                position: fixed;
                 top: 50%;
                 left: 50%;
                 transform: translate(-50%, -50%);
-                text-align: center;
-                z-index: 100;
+                background-color: rgba(0, 0, 0, 0.7);
+                padding: 30px;
+                border-radius: 15px;
+                border: 2px solid rgba(0, 255, 136, 0.3);
+                box-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
             }
             
             /* Loading Circle Animation */
@@ -617,11 +620,14 @@ def update_chat(
         logger.warning(f"No valid question found. Button ID: {button_id}")
         return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
-    # Add user message to chat
+    # Update to show loading immediately - first update
+    # (Just activating the loading indicator, not updating any other components yet)
+    # Add user message to chat without waiting for API response
     user_message = html.Div(question, className="message user-message")
     updated_messages = current_messages + [user_message]
-
-    # Show loading indicator
+    initial_chat_display = {"display": "block"} if current_messages else {"display": "block"}
+    
+    # Immediate loading state update
     loading_data = {"is_loading": True}
     
     # Call backend for response
@@ -753,9 +759,28 @@ def generate_chart(chart_data):
 app.clientside_callback(
     """
     function(loadingData) {
+        console.log("Loading data changed:", loadingData);
+        
+        // Get the loading element
+        var loadingElement = document.getElementById('loading-indicator');
+        
         if (loadingData && loadingData.is_loading === true) {
+            console.log("Setting loading display to block");
+            
+            // Ensure the element exists and update its style directly
+            if (loadingElement) {
+                loadingElement.style.display = 'block';
+            }
+            
             return {"display": "block"};
         } else {
+            console.log("Setting loading display to none");
+            
+            // Ensure the element exists and update its style directly
+            if (loadingElement) {
+                loadingElement.style.display = 'none';
+            }
+            
             return {"display": "none"};
         }
     }
@@ -781,6 +806,80 @@ app.clientside_callback(
     """,
     Output("chat-messages-container", "children", allow_duplicate=True),
     Input("chat-messages-container", "children"),
+    prevent_initial_call=True,
+)
+
+# Add client-side callbacks to immediately show loading when buttons are clicked
+app.clientside_callback(
+    """
+    function(n_clicks) {
+        console.log("Send button clicked, showing loading indicator");
+        
+        // Update the store to trigger the loading indicator
+        if (n_clicks > 0) {
+            // Get the loading element and show it immediately
+            var loadingElement = document.getElementById('loading-indicator');
+            if (loadingElement) {
+                loadingElement.style.display = 'block';
+            }
+        }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("send-button", "n_clicks", allow_duplicate=True),
+    Input("send-button", "n_clicks"),
+    prevent_initial_call=True,
+)
+
+# Add client-side callback for question buttons to show loading immediately
+app.clientside_callback(
+    """
+    function(n_clicks, _) {
+        console.log("Question button clicked, showing loading indicator");
+        
+        if (n_clicks > 0) {
+            // Get the loading element and show it immediately
+            var loadingElement = document.getElementById('loading-indicator');
+            if (loadingElement) {
+                loadingElement.style.display = 'block';
+            }
+        }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output({"type": "question-button", "index": dash.ALL}, "n_clicks", allow_duplicate=True),
+    Input({"type": "question-button", "index": dash.ALL}, "n_clicks"),
+    State("dummy-div", "children"),
+    prevent_initial_call=True,
+)
+
+# Add a separate client-side callback to help debug the loading indicator visibility
+app.clientside_callback(
+    """
+    function() {
+        // This runs on page load
+        console.log("Setting up loading indicator visibility monitor");
+        
+        // Set up a MutationObserver to monitor the loading indicator's style changes
+        var loadingElement = document.getElementById('loading-indicator');
+        if (loadingElement) {
+            var observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.attributeName === 'style') {
+                        console.log("Loading indicator style changed:", 
+                                    loadingElement.style.display);
+                    }
+                });
+            });
+            
+            observer.observe(loadingElement, { attributes: true });
+        }
+        
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("dummy-div", "children", allow_duplicate=True),
+    Input("dummy-div", "children"),
     prevent_initial_call=True,
 )
 
