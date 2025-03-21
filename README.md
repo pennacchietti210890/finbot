@@ -9,7 +9,11 @@ finbot/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py          # FastAPI backend application
-│   ├── llm_service.py   # LLM integration service
+│   ├── finbot/          # LangGraph agentic workflow
+│   │   ├── agents.py    # Agent definitions
+│   │   ├── graphs.py    # LangGraph structure
+│   │   ├── nodes.py     # Graph nodes 
+│   │   └── tools.py     # Financial tools
 │   └── llm/             # LLM-related utilities
 ├── ui/
 │   ├── __init__.py
@@ -95,6 +99,20 @@ poetry add --group dev package-name
 4. The chat interface will appear with the AI-generated response and any relevant charts.
 5. Continue your conversation with follow-up questions.
 
+## LangGraph Integration
+
+FinBot uses LangGraph, a framework for building stateful, multi-agent workflows:
+
+- **Agentic Workflow**: The backend uses a supervisor-worker pattern with specialized agents for different tasks.
+- **Stock Data Tool**: Integrated tool for fetching historical stock prices from Yahoo Finance.
+- **Chart Generation**: Automatic generation of stock price charts based on query context.
+- **Stateful Processing**: Maintains state between nodes, allowing complex multi-step reasoning.
+
+The workflow consists of:
+1. A supervisor node that routes the user query to the appropriate worker
+2. A stock price node that retrieves financial data
+3. A chart node that generates visualizations
+
 ## Frontend Features
 
 The modern Dash-based frontend includes:
@@ -118,7 +136,7 @@ The modern Dash-based frontend includes:
 ## Features
 
 - Natural language processing for financial queries
-- Integration with financial data sources
+- Integration with financial data sources via LangGraph
 - Dynamic chart generation for data visualization
 - Conversational UI with persistent chat history
 - Modern, cyberpunk-styled interface

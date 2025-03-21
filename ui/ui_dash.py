@@ -6,7 +6,12 @@ import requests
 import random
 import os
 import math
+import logging
 from typing import Dict, Any, List
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Reduced to 10 questions
 EXAMPLE_QUESTIONS = [
@@ -15,7 +20,6 @@ EXAMPLE_QUESTIONS = [
     "What are the key financial metrics for Tesla?",
     "What is Amazon's P/E ratio compared to the industry average?",
     "Show me the dividend yield for Coca-Cola",
-    "What sectors are performing best in the current market?",
     "Compare the P/E ratios of top 5 tech companies",
 ]
 
@@ -23,43 +27,60 @@ EXAMPLE_QUESTIONS = [
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 
 # Initialize the Dash app
-app = dash.Dash(__name__, 
-                suppress_callback_exceptions=True,
-                meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}]
+app = dash.Dash(
+    __name__,
+    suppress_callback_exceptions=True,
+    meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
 )
 
 # Define the app's layout
-app.layout = html.Div([
-    # Store components for maintaining state
-    dcc.Store(id='chat-history-store', data={"messages": []}),
-    dcc.Store(id='show-questions-store', data={"show": True}),
-    
-    # Main container
-    html.Div([
-        # Chat Interface Container
-        html.Div([
-            # Chat Messages Area
-            html.Div(id='chat-messages-container', className='chat-messages-container'),
-            
-            # Questions Area (stacked above the input)
-            html.Div(id='questions-area', className='questions-area'),
-            
-            # Chat Input Area
-            html.Div([
-                dcc.Input(
-                    id='chat-input',
-                    type='text',
-                    placeholder='Ask about any S&P 500 company...',
-                    className='chat-input'
-                ),
-                html.Button('Send', id='send-button', n_clicks=0, className='send-button')
-            ], className='chat-input-container')
-        ], className='chat-interface')
-    ], className='main-container')
-])
+app.layout = html.Div(
+    [
+        # Store components for maintaining state
+        dcc.Store(id="chat-history-store", data={"messages": []}),
+        dcc.Store(id="show-questions-store", data={"show": True}),
+        # Main container
+        html.Div(
+            [
+                # Chat Interface Container
+                html.Div(
+                    [
+                        # Chat Messages Area
+                        html.Div(
+                            id="chat-messages-container",
+                            className="chat-messages-container",
+                        ),
+                        # Questions Area (stacked above the input)
+                        html.Div(id="questions-area", className="questions-area"),
+                        # Chat Input Area
+                        html.Div(
+                            [
+                                dcc.Input(
+                                    id="chat-input",
+                                    type="text",
+                                    placeholder="Ask about any S&P 500 company...",
+                                    className="chat-input",
+                                ),
+                                html.Button(
+                                    "Send",
+                                    id="send-button",
+                                    n_clicks=0,
+                                    className="send-button",
+                                ),
+                            ],
+                            className="chat-input-container",
+                        ),
+                    ],
+                    className="chat-interface",
+                )
+            ],
+            className="main-container",
+        ),
+    ]
+)
 
 # Custom CSS for the app
-app.index_string = '''
+app.index_string = """
 <!DOCTYPE html>
 <html>
     <head>
@@ -104,6 +125,7 @@ app.index_string = '''
                 justify-content: flex-end;
                 position: relative;
                 margin-bottom: 0;
+                margin-top: -15vh;
             }
             
             /* Chat Messages Container */
@@ -168,6 +190,23 @@ app.index_string = '''
                 border-right: 2px solid #00ff88;
             }
             
+            /* Charts Container */
+            .charts-container {
+                margin-top: 15px;
+                padding: 5px;
+                border-radius: 6px;
+                background-color: rgba(5, 15, 10, 0.5);
+                border: 1px dashed rgba(0, 255, 136, 0.3);
+                box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+            }
+            
+            /* Style for chart title */
+            .js-plotly-plot .gtitle {
+                font-family: 'Orbitron', sans-serif !important;
+                fill: #00ff88 !important;
+                font-weight: 500 !important;
+            }
+            
             /* Questions Area */
             .questions-area {
                 margin: 0 auto 15px auto;
@@ -180,6 +219,11 @@ app.index_string = '''
                 gap: 8px;
                 max-width: 90%;
                 min-height: 0;
+            }
+            
+            /* Style for initial page (when questions are visible but chat is not) */
+            .chat-interface:has(.questions-area:not(:empty)) .chat-input-container {
+                margin-top: 20px;
             }
             
             .question-button {
@@ -299,7 +343,8 @@ app.index_string = '''
         </footer>
     </body>
 </html>
-'''
+"""
+
 
 # Function to call backend API
 def call_backend(query: str) -> Dict[str, Any]:
@@ -307,141 +352,222 @@ def call_backend(query: str) -> Dict[str, Any]:
     Send a request to the backend API and return the response.
     """
     try:
+        logger.info(f"Sending request to backend at {API_URL}/chat")
         response = requests.post(
             f"{API_URL}/chat",
             json={"query": query},
+            timeout=60  # Set a timeout of 60 seconds for longer queries
         )
         response.raise_for_status()
+        
+        logger.info(f"Received successful response from backend (status code: {response.status_code})")
         return response.json()
+    except requests.exceptions.Timeout:
+        logger.error("Backend request timed out after 60 seconds")
+        return {
+            "text": "Sorry, the request took too long to process. Please try a simpler query or try again later.",
+            "charts_data": "{}",
+        }
+    except requests.exceptions.ConnectionError:
+        logger.error(f"Connection error when contacting backend at {API_URL}")
+        return {
+            "text": "Sorry, I couldn't connect to the backend server. Please check that the API is running.",
+            "charts_data": "{}",
+        }
     except requests.exceptions.RequestException as e:
-        return {"text": f"Sorry, I couldn't process your request due to a server error: {str(e)}", "charts": []}
+        logger.error(f"Request error when calling backend: {str(e)}")
+        return {
+            "text": f"Sorry, I couldn't process your request due to a server error: {str(e)}",
+            "charts_data": "{}",
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error when calling backend: {str(e)}")
+        return {
+            "text": "Sorry, an unexpected error occurred while processing your request.",
+            "charts_data": "{}",
+        }
+
 
 # Function to parse response and extract charts
 def parse_response(response: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Parse the response from the backend and extract any charts.
-    Returns a tuple of (text, charts)
+    Parse the response from the backend and extract text and chart data.
+    Returns a dictionary containing text and charts.
     """
     text = response.get("text", "")
-    charts = response.get("charts", [])
+    charts = []
     
-    # If charts is an empty list but there are chart objects in the response
-    # Try to extract them from the response format
-    if not charts:
-        # Check if there's a 'data' key that might contain charts
-        if "data" in response:
-            data = response["data"]
-            if isinstance(data, dict) and "charts" in data:
-                charts = data["charts"]
-            elif isinstance(data, list):
-                # Assume the list contains chart objects
-                charts = data
+    # Try to parse charts_data which is a JSON string
+    charts_data = response.get("charts_data", "{}")
     
-    return {
-        "text": text,
-        "charts": charts
-    }
-
+    try:
+        # Parse the JSON string into a dictionary
+        if charts_data and charts_data != "{}":
+            logger.info(f"Parsing charts_data: {charts_data[:100]}...")
+            stock_data = json.loads(charts_data)
+            
+            # Create a chart object in the format expected by generate_chart
+            if "dates" in stock_data and "prices" in stock_data:
+                logger.info(f"Creating chart with {len(stock_data['dates'])} data points")
+                chart = {
+                    "type": "line",
+                    "title": "Stock Price Time Series",
+                    "data": {
+                        "Stock Price": {
+                            "x": stock_data.get("dates", []),
+                            "y": stock_data.get("prices", [])
+                        }
+                    }
+                }
+                charts.append(chart)
+                logger.info("Chart added successfully")
+            else:
+                logger.warning(f"Missing 'dates' or 'prices' in stock_data: {list(stock_data.keys())}")
+    except json.JSONDecodeError as e:
+        logger.error(f"Error parsing charts_data: {e}")
+    except Exception as e:
+        logger.error(f"Error processing chart data: {str(e)}")
+    
+    return {"text": text, "charts": charts}
 
 
 # Callback to generate stacked question buttons
 @app.callback(
-    Output('questions-area', 'children'),
-    [Input('chat-history-store', 'data'),
-     Input('show-questions-store', 'data')]
+    Output("questions-area", "children"),
+    [Input("chat-history-store", "data"), Input("show-questions-store", "data")],
 )
 def generate_question_buttons(chat_history, show_questions_data):
     # Hide questions if user has submitted a query or if show_questions is False
-    if (chat_history and len(chat_history.get("messages", [])) > 0) or not show_questions_data.get("show", True):
+    if (
+        chat_history and len(chat_history.get("messages", [])) > 0
+    ) or not show_questions_data.get("show", True):
         return []
-    
+
     # Create buttons for each example question
     buttons = []
     for i, question in enumerate(EXAMPLE_QUESTIONS):
         button = html.Button(
             question,
-            id={'type': 'question-button', 'index': i},
-            className='question-button',
-            n_clicks=0
+            id={"type": "question-button", "index": i},
+            className="question-button",
+            n_clicks=0,
         )
         buttons.append(button)
-    
+
     return buttons
+
 
 # Callback to handle user input and generate responses
 @app.callback(
-    [Output('chat-messages-container', 'children'),
-     Output('chat-history-store', 'data'),
-     Output('chat-input', 'value'),
-     Output('show-questions-store', 'data'),
-     Output('chat-messages-container', 'style')],
-    [Input('send-button', 'n_clicks'),
-     Input({'type': 'question-button', 'index': dash.ALL}, 'n_clicks')],
-    [State('chat-input', 'value'),
-     State('chat-messages-container', 'children'),
-     State('chat-history-store', 'data'),
-     State('show-questions-store', 'data')]
+    [
+        Output("chat-messages-container", "children"),
+        Output("chat-history-store", "data"),
+        Output("chat-input", "value"),
+        Output("show-questions-store", "data"),
+        Output("chat-messages-container", "style"),
+    ],
+    [
+        Input("send-button", "n_clicks"),
+        Input({"type": "question-button", "index": dash.ALL}, "n_clicks"),
+    ],
+    [
+        State("chat-input", "value"),
+        State("chat-messages-container", "children"),
+        State("chat-history-store", "data"),
+        State("show-questions-store", "data"),
+    ],
 )
-def update_chat(send_clicks, question_button_clicks, 
-                input_value, current_messages, chat_history, show_questions_data):
+def update_chat(
+    send_clicks,
+    question_button_clicks,
+    input_value,
+    current_messages,
+    chat_history,
+    show_questions_data,
+):
     current_messages = current_messages or []
     chat_history = chat_history or {"messages": []}
-    
+
     # Get which input triggered the callback
     trigger = ctx.triggered_id
-    
+
     # Determine the question from question button or input
     question = None
-    
+
     # Check if triggered by a question button
-    if isinstance(trigger, dict) and trigger.get('type') == 'question-button':
-        index = trigger.get('index', 0)
+    if isinstance(trigger, dict) and trigger.get("type") == "question-button":
+        index = trigger.get("index", 0)
         if index < len(EXAMPLE_QUESTIONS):
             question = EXAMPLE_QUESTIONS[index]
+            logger.info(f"Question button clicked: {question}")
     # Check if triggered by send button with input text
-    elif trigger == 'send-button' and input_value:
+    elif trigger == "send-button" and input_value:
         question = input_value
-    
+        logger.info(f"Send button clicked with input: {question}")
+
     # If no valid question, return unchanged
     if not question:
-        return current_messages, chat_history, input_value, show_questions_data, {'display': 'none'}
-    
+        return (
+            current_messages,
+            chat_history,
+            input_value,
+            show_questions_data,
+            {"display": "none"},
+        )
+
     # Add user message to chat
-    user_message = html.Div(question, className='message user-message')
+    user_message = html.Div(question, className="message user-message")
     updated_messages = current_messages + [user_message]
-    
+
     # Call backend for response
+    logger.info(f"Calling backend API with query: {question}")
     response = call_backend(question)
-    
+    logger.info(f"Received response from backend: {str(response)[:100]}...")
+
     # Parse the response
     parsed_response = parse_response(response)
-    
+    logger.info(f"Parsed response with {len(parsed_response.get('charts', []))} charts")
+
+    # Create chart components if any
+    chart_components = []
+    if parsed_response.get("charts"):
+        chart_components = [
+            generate_chart(chart_data) for chart_data in parsed_response["charts"]
+        ]
+        logger.info(f"Generated {len(chart_components)} chart components")
+
     # Add assistant message to chat
-    assistant_message = html.Div([
-        html.P(parsed_response["text"]),
-        # Add any charts if available
-        html.Div(id={'type': 'charts-container', 'index': len(chat_history["messages"])},
-                children=[generate_chart(chart_data) for chart_data in parsed_response.get("charts", [])])
-    ], className='message assistant-message')
-    
+    assistant_message = html.Div(
+        [
+            html.P(parsed_response["text"]),
+            # Add charts container if there are charts
+            html.Div(
+                children=chart_components,
+                className="charts-container",
+            ) if chart_components else None,
+        ],
+        className="message assistant-message",
+    )
+
     updated_messages = updated_messages + [assistant_message]
-    
+
     # Update chat history
-    chat_history["messages"].append({
-        "role": "user",
-        "content": question
-    })
-    chat_history["messages"].append({
-        "role": "assistant",
-        "content": parsed_response["text"],
-        "charts": parsed_response.get("charts", [])
-    })
-    
+    chat_history["messages"].append({"role": "user", "content": question})
+    chat_history["messages"].append(
+        {
+            "role": "assistant",
+            "content": parsed_response["text"],
+            "charts": parsed_response.get("charts", []),
+        }
+    )
+
     # Hide questions after user input
     show_questions_data = {"show": False}
-    
+
     # Show chat messages container
-    return updated_messages, chat_history, "", show_questions_data, {'display': 'block'}
+    logger.info("Returning updated chat interface")
+    return updated_messages, chat_history, "", show_questions_data, {"display": "block"}
+
 
 # Function to generate a Plotly chart from data
 def generate_chart(chart_data):
@@ -456,44 +582,45 @@ def generate_chart(chart_data):
     title = chart_data.get("title", "")
     data = chart_data.get("data", {})
     
+    logger.info(f"Generating chart of type: {chart_type}, title: {title}")
+
     fig = go.Figure()
-    
+
     if chart_type == "line":
         # Line chart for time series data
         for series_name, series_data in data.items():
             x_data = series_data.get("x", [])
             y_data = series_data.get("y", [])
-            fig.add_trace(
-                go.Scatter(
-                    x=x_data,
-                    y=y_data,
-                    mode="lines",
-                    name=series_name
+            
+            # Validate data to ensure we have matching x and y data points
+            if x_data and y_data and len(x_data) == len(y_data):
+                logger.info(f"Adding line series '{series_name}' with {len(x_data)} data points")
+                fig.add_trace(
+                    go.Scatter(x=x_data, y=y_data, mode="lines", name=series_name)
                 )
-            )
-    
+            else:
+                logger.warning(f"Invalid data for series {series_name}: x={len(x_data)}, y={len(y_data)}")
+
     elif chart_type == "bar":
         # Bar chart for comparison data
         categories = list(data.keys())
         values = [data[category] for category in categories]
-        fig.add_trace(
-            go.Bar(
-                x=categories,
-                y=values
-            )
-        )
-    
+        if categories and values:
+            logger.info(f"Adding bar chart with {len(categories)} categories")
+            fig.add_trace(go.Bar(x=categories, y=values))
+        else:
+            logger.warning("Empty data for bar chart")
+
     elif chart_type == "pie":
         # Pie chart for distribution data
         labels = list(data.keys())
         values = [data[label] for label in labels]
-        fig.add_trace(
-            go.Pie(
-                labels=labels,
-                values=values
-            )
-        )
-    
+        if labels and values:
+            logger.info(f"Adding pie chart with {len(labels)} segments")
+            fig.add_trace(go.Pie(labels=labels, values=values))
+        else:
+            logger.warning("Empty data for pie chart")
+
     # Apply dark theme to charts
     fig.update_layout(
         title=title,
@@ -502,24 +629,40 @@ def generate_chart(chart_data):
         plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=20, r=20, t=40, b=20),
         font=dict(color="white"),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
-        )
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     
+    logger.info("Chart generation completed")
     return dcc.Graph(
-        figure=fig, 
-        config={'displayModeBar': False},
-        style={"margin": "20px 0"}
+        figure=fig, config={"displayModeBar": False}, style={"margin": "20px 0"}
     )
+
+
+# Add client-side callback for auto-scrolling chat messages
+app.clientside_callback(
+    """
+    function(children) {
+        if (children) {
+            setTimeout(function() {
+                var chatContainer = document.getElementById('chat-messages-container');
+                if (chatContainer) {
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+            }, 100);
+        }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("chat-messages-container", "children", allow_duplicate=True),
+    Input("chat-messages-container", "children"),
+    prevent_initial_call=True,
+)
+
 
 def main():
     """Entry point for running the Dash application"""
-    app.run(debug=False, host='0.0.0.0', port=8502) 
+    app.run(debug=False, host="0.0.0.0", port=8502)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
