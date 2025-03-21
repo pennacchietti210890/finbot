@@ -40,6 +40,7 @@ app.layout = html.Div(
         dcc.Store(id="chat-history-store", data={"messages": []}),
         dcc.Store(id="show-questions-store", data={"show": True}),
         dcc.Store(id="loading-store", data={"is_loading": False}),
+        dcc.Store(id="session-id-store", data={"session_id": ""}),
         # Dummy div to avoid automatic triggering of callbacks
         html.Div(id="dummy-div", style={"display": "none"}),
         # Main container
@@ -437,15 +438,23 @@ app.index_string = """
 
 
 # Function to call backend API
-def call_backend(query: str) -> Dict[str, Any]:
+def call_backend(query: str, session_id: str = "") -> Dict[str, Any]:
     """
     Send a request to the backend API and return the response.
+    Includes session ID to maintain state between requests.
     """
     try:
-        logger.info(f"Sending request to backend at {API_URL}/chat")
+        logger.info(f"Sending request to backend at {API_URL}/chat with session_id: {session_id}")
+        
+        # Create payload with query and session ID
+        payload = {
+            "query": query,
+            "session_id": session_id
+        }
+        
         response = requests.post(
             f"{API_URL}/chat",
-            json={"query": query},
+            json=payload,
             timeout=60  # Set a timeout of 60 seconds for longer queries
         )
         response.raise_for_status()
@@ -457,24 +466,28 @@ def call_backend(query: str) -> Dict[str, Any]:
         return {
             "text": "Sorry, the request took too long to process. Please try a simpler query or try again later.",
             "charts_data": "{}",
+            "session_id": session_id
         }
     except requests.exceptions.ConnectionError:
         logger.error(f"Connection error when contacting backend at {API_URL}")
         return {
             "text": "Sorry, I couldn't connect to the backend server. Please check that the API is running.",
             "charts_data": "{}",
+            "session_id": session_id
         }
     except requests.exceptions.RequestException as e:
         logger.error(f"Request error when calling backend: {str(e)}")
         return {
             "text": f"Sorry, I couldn't process your request due to a server error: {str(e)}",
             "charts_data": "{}",
+            "session_id": session_id
         }
     except Exception as e:
         logger.error(f"Unexpected error when calling backend: {str(e)}")
         return {
             "text": "Sorry, an unexpected error occurred while processing your request.",
             "charts_data": "{}",
+            "session_id": session_id
         }
 
 
@@ -482,10 +495,11 @@ def call_backend(query: str) -> Dict[str, Any]:
 def parse_response(response: Dict[str, Any]) -> Dict[str, Any]:
     """
     Parse the response from the backend and extract text and chart data.
-    Returns a dictionary containing text and charts.
+    Returns a dictionary containing text, charts, and session ID.
     """
     text = response.get("text", "")
     charts = []
+    session_id = response.get("session_id", "")
     
     # Try to parse charts_data which is a JSON string
     charts_data = response.get("charts_data", "{}")
@@ -518,7 +532,7 @@ def parse_response(response: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error processing chart data: {str(e)}")
     
-    return {"text": text, "charts": charts}
+    return {"text": text, "charts": charts, "session_id": session_id}
 
 
 # Initialize the question buttons
@@ -561,6 +575,7 @@ def toggle_questions_visibility(chat_history):
         Output("chat-input", "value"),
         Output("chat-messages-container", "style"),
         Output("loading-store", "data"),
+        Output("session-id-store", "data"),
     ],
     [
         Input("send-button", "n_clicks"),
@@ -571,6 +586,7 @@ def toggle_questions_visibility(chat_history):
         State("chat-messages-container", "children"),
         State("chat-history-store", "data"),
         State("loading-store", "data"),
+        State("session-id-store", "data"),
     ],
     prevent_initial_call=True,  # Critical: prevent callback on initial load
 )
@@ -581,14 +597,18 @@ def update_chat(
     current_messages,
     chat_history,
     loading_data,
+    session_data,
 ):
+    # Get session ID if it exists
+    session_id = session_data.get("session_id", "")
+    
     # Check which input triggered the callback
     ctx_msg = dash.callback_context
     
     # Skip if no explicit trigger or during page load
     if not ctx_msg.triggered:
         logger.info("No trigger found, skipping callback")
-        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
     
     # Get the ID of the button that triggered the callback
     button_id = ctx_msg.triggered[0]['prop_id'].split('.')[0]
@@ -618,10 +638,9 @@ def update_chat(
     # If no valid question, return unchanged
     if not question:
         logger.warning(f"No valid question found. Button ID: {button_id}")
-        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
     # Update to show loading immediately - first update
-    # (Just activating the loading indicator, not updating any other components yet)
     # Add user message to chat without waiting for API response
     user_message = html.Div(question, className="message user-message")
     updated_messages = current_messages + [user_message]
@@ -632,8 +651,13 @@ def update_chat(
     
     # Call backend for response
     logger.info(f"Calling backend API with query: {question}")
-    response = call_backend(question)
+    response = call_backend(query=question, session_id=session_id)
     logger.info(f"Received response from backend: {str(response)[:100]}...")
+
+    # Get session ID from response
+    if response.get("session_id"):
+        session_id = response.get("session_id")
+        session_data = {"session_id": session_id}
 
     # Parse the response
     parsed_response = parse_response(response)
@@ -683,6 +707,7 @@ def update_chat(
         "", 
         {"display": "block"},
         loading_data,
+        session_data,
     )
 
 
