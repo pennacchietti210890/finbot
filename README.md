@@ -2,6 +2,11 @@
 
 FinBot is an AI-powered chatbot that provides information about publicly listed companies, primarily from the S&P 500 index. Users can ask questions in natural language and receive AI-generated responses with relevant charts and financial insights.
 
+## UI Preview
+
+![FinBot Application UI Preview](images/ui_preview_1.png)
+![FinBot Application UI Preview](images/ui_preview_2.png)
+
 ## Project Structure
 
 ```
