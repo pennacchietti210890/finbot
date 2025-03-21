@@ -39,6 +39,9 @@ app.layout = html.Div(
         # Store components for maintaining state
         dcc.Store(id="chat-history-store", data={"messages": []}),
         dcc.Store(id="show-questions-store", data={"show": True}),
+        dcc.Store(id="loading-store", data={"is_loading": False}),
+        # Dummy div to avoid automatic triggering of callbacks
+        html.Div(id="dummy-div", style={"display": "none"}),
         # Main container
         html.Div(
             [
@@ -51,7 +54,22 @@ app.layout = html.Div(
                             className="chat-messages-container",
                         ),
                         # Questions Area (stacked above the input)
-                        html.Div(id="questions-area", className="questions-area"),
+                        html.Div(
+                            # Pre-populate with empty div to prevent automatic execution
+                            [html.Div(style={"display": "none"})],
+                            id="questions-area", 
+                            className="questions-area"
+                        ),
+                        # Loading indicator
+                        html.Div(
+                            [
+                                html.Div(className="loading-circle"),
+                                html.Div("Processing query...", className="loading-text"),
+                            ],
+                            id="loading-indicator",
+                            className="loading-container",
+                            style={"display": "none"},  # Initially hidden
+                        ),
                         # Chat Input Area
                         html.Div(
                             [
@@ -143,6 +161,75 @@ app.index_string = """
                 box-shadow: 0 0 15px rgba(0, 255, 136, 0.1);
                 /* Initially hide the container */
                 display: none;
+            }
+            
+            /* Loading Container */
+            .loading-container {
+                display: none;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                text-align: center;
+                z-index: 100;
+            }
+            
+            /* Loading Circle Animation */
+            .loading-circle {
+                width: 80px;
+                height: 80px;
+                margin: 0 auto 15px;
+                border: 4px solid rgba(0, 255, 136, 0.1);
+                border-top: 4px solid #00ff88;
+                border-radius: 50%;
+                animation: spin 1.5s linear infinite, pulse 2s infinite;
+                box-shadow: 0 0 20px rgba(0, 255, 136, 0.6);
+                position: relative;
+            }
+            
+            .loading-circle:before {
+                content: '';
+                position: absolute;
+                top: -10px;
+                left: -10px;
+                right: -10px;
+                bottom: -10px;
+                border: 2px solid rgba(0, 255, 136, 0.2);
+                border-radius: 50%;
+                animation: pulse-out 2s infinite;
+            }
+            
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            
+            @keyframes pulse {
+                0% { box-shadow: 0 0 10px rgba(0, 255, 136, 0.4); }
+                50% { box-shadow: 0 0 25px rgba(0, 255, 136, 0.7); }
+                100% { box-shadow: 0 0 10px rgba(0, 255, 136, 0.4); }
+            }
+            
+            @keyframes pulse-out {
+                0% { transform: scale(1); opacity: 0.5; }
+                50% { transform: scale(1.1); opacity: 0.2; }
+                100% { transform: scale(1); opacity: 0.5; }
+            }
+            
+            /* Loading Text */
+            .loading-text {
+                font-family: 'Orbitron', sans-serif;
+                font-size: 18px;
+                color: #00ff88;
+                text-shadow: 0 0 10px rgba(0, 255, 136, 0.7);
+                letter-spacing: 1px;
+                animation: blink 1.5s infinite;
+            }
+            
+            @keyframes blink {
+                0% { opacity: 0.4; }
+                50% { opacity: 1; }
+                100% { opacity: 0.4; }
             }
             
             /* Scrollbar styling */
@@ -431,19 +518,13 @@ def parse_response(response: Dict[str, Any]) -> Dict[str, Any]:
     return {"text": text, "charts": charts}
 
 
-# Callback to generate stacked question buttons
+# Initialize the question buttons
 @app.callback(
     Output("questions-area", "children"),
-    [Input("chat-history-store", "data"), Input("show-questions-store", "data")],
+    [Input("dummy-div", "children")],
+    prevent_initial_call=False,
 )
-def generate_question_buttons(chat_history, show_questions_data):
-    # Hide questions if user has submitted a query or if show_questions is False
-    if (
-        chat_history and len(chat_history.get("messages", [])) > 0
-    ) or not show_questions_data.get("show", True):
-        return []
-
-    # Create buttons for each example question
+def initialize_question_buttons(_):
     buttons = []
     for i, question in enumerate(EXAMPLE_QUESTIONS):
         button = html.Button(
@@ -453,18 +534,30 @@ def generate_question_buttons(chat_history, show_questions_data):
             n_clicks=0,
         )
         buttons.append(button)
-
+    
+    logger.info(f"Generated {len(buttons)} question buttons")
     return buttons
 
 
-# Callback to handle user input and generate responses
+# Callback to show/hide questions based on chat history
+@app.callback(
+    Output("questions-area", "style"),
+    [Input("chat-history-store", "data")],
+)
+def toggle_questions_visibility(chat_history):
+    if chat_history and len(chat_history.get("messages", [])) > 0:
+        return {"display": "none"}
+    return {"display": "flex"}
+
+
+# Callback to handle user input and generate responses - ONLY triggered by explicit button clicks
 @app.callback(
     [
         Output("chat-messages-container", "children"),
         Output("chat-history-store", "data"),
         Output("chat-input", "value"),
-        Output("show-questions-store", "data"),
         Output("chat-messages-container", "style"),
+        Output("loading-store", "data"),
     ],
     [
         Input("send-button", "n_clicks"),
@@ -474,8 +567,9 @@ def generate_question_buttons(chat_history, show_questions_data):
         State("chat-input", "value"),
         State("chat-messages-container", "children"),
         State("chat-history-store", "data"),
-        State("show-questions-store", "data"),
+        State("loading-store", "data"),
     ],
+    prevent_initial_call=True,  # Critical: prevent callback on initial load
 )
 def update_chat(
     send_clicks,
@@ -483,42 +577,53 @@ def update_chat(
     input_value,
     current_messages,
     chat_history,
-    show_questions_data,
+    loading_data,
 ):
+    # Check which input triggered the callback
+    ctx_msg = dash.callback_context
+    
+    # Skip if no explicit trigger or during page load
+    if not ctx_msg.triggered:
+        logger.info("No trigger found, skipping callback")
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+    
+    # Get the ID of the button that triggered the callback
+    button_id = ctx_msg.triggered[0]['prop_id'].split('.')[0]
+    logger.info(f"Button clicked: {button_id}")
+    
+    # Initialize variables
     current_messages = current_messages or []
     chat_history = chat_history or {"messages": []}
-
-    # Get which input triggered the callback
-    trigger = ctx.triggered_id
-
-    # Determine the question from question button or input
     question = None
-
-    # Check if triggered by a question button
-    if isinstance(trigger, dict) and trigger.get("type") == "question-button":
-        index = trigger.get("index", 0)
-        if index < len(EXAMPLE_QUESTIONS):
-            question = EXAMPLE_QUESTIONS[index]
-            logger.info(f"Question button clicked: {question}")
-    # Check if triggered by send button with input text
-    elif trigger == "send-button" and input_value:
+    
+    # Determine the question based on which button was clicked
+    if button_id == "send-button" and send_clicks and send_clicks > 0 and input_value:
         question = input_value
         logger.info(f"Send button clicked with input: {question}")
-
+    elif "{" in button_id:  # This is a question button
+        try:
+            # Parse the button ID to get the index
+            button_dict = json.loads(button_id.replace("'", "\""))
+            if button_dict.get("type") == "question-button":
+                index = button_dict.get("index", 0)
+                if index < len(EXAMPLE_QUESTIONS) and question_button_clicks[index] > 0:
+                    question = EXAMPLE_QUESTIONS[index]
+                    logger.info(f"Question button {index} clicked: {question}")
+        except Exception as e:
+            logger.error(f"Error parsing button ID: {e}")
+    
     # If no valid question, return unchanged
     if not question:
-        return (
-            current_messages,
-            chat_history,
-            input_value,
-            show_questions_data,
-            {"display": "none"},
-        )
+        logger.warning(f"No valid question found. Button ID: {button_id}")
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
     # Add user message to chat
     user_message = html.Div(question, className="message user-message")
     updated_messages = current_messages + [user_message]
 
+    # Show loading indicator
+    loading_data = {"is_loading": True}
+    
     # Call backend for response
     logger.info(f"Calling backend API with query: {question}")
     response = call_backend(question)
@@ -560,13 +665,19 @@ def update_chat(
             "charts": parsed_response.get("charts", []),
         }
     )
-
-    # Hide questions after user input
-    show_questions_data = {"show": False}
+    
+    # Hide loading indicator
+    loading_data = {"is_loading": False}
 
     # Show chat messages container
     logger.info("Returning updated chat interface")
-    return updated_messages, chat_history, "", show_questions_data, {"display": "block"}
+    return (
+        updated_messages, 
+        chat_history, 
+        "", 
+        {"display": "block"},
+        loading_data,
+    )
 
 
 # Function to generate a Plotly chart from data
@@ -637,6 +748,21 @@ def generate_chart(chart_data):
         figure=fig, config={"displayModeBar": False}, style={"margin": "20px 0"}
     )
 
+
+# Add client-side callback for loading status
+app.clientside_callback(
+    """
+    function(loadingData) {
+        if (loadingData && loadingData.is_loading === true) {
+            return {"display": "block"};
+        } else {
+            return {"display": "none"};
+        }
+    }
+    """,
+    Output("loading-indicator", "style"),
+    Input("loading-store", "data"),
+)
 
 # Add client-side callback for auto-scrolling chat messages
 app.clientside_callback(
