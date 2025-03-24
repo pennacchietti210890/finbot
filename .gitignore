@@ -32,6 +32,7 @@ Thumbs.db
 
 # Log files
 *.log
+logs/
 
 # Local development configuration
 .env.local

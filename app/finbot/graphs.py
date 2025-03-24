@@ -1,13 +1,17 @@
-from app.finbot.nodes import stock_price_node, chart_node, make_supervisor_node, State
+from app.finbot.nodes import stock_price_node, chart_node, make_supervisor_node, State, financials_node
 from langgraph.graph import StateGraph, START
 
+
 def create_graph(llm):
-    stock_supervisor_node = make_supervisor_node(llm, ["stock_price"])  # "chart"])
+    stock_supervisor_node = make_supervisor_node(
+        llm, ["stock_price", "chart", "financial_statements_and_metrics"]
+    )  # "chart"])
 
     finbot_builder = StateGraph(State)
     finbot_builder.add_node("supervisor", stock_supervisor_node)
     finbot_builder.add_node("stock_price", stock_price_node)
-    # finbot_builder.add_node("chart", chart_node)
+    finbot_builder.add_node("chart", chart_node)
+    finbot_builder.add_node("financial_statements_and_metrics", financials_node)
 
     finbot_builder.add_edge(START, "supervisor")
     finbot_graph = finbot_builder.compile()

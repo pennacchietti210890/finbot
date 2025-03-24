@@ -1,4 +1,4 @@
-from typing import Annotated, List
+from typing import Annotated, List, TypedDict
 
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_community.tools.tavily_search import TavilySearchResults
@@ -20,8 +20,6 @@ def get_historical_prices(ticker: str, day: int = 365) -> str:
     Only return the JSON.
     Example output:
     {"dates": ["2025-02-06", "2025-02-07"], "prices": [414.9879150390625, 408.9300537109375]}
-
-
     """
     try:
         stock = yf.Ticker(ticker)
@@ -69,3 +67,65 @@ def python_repl_tool(
 
     except BaseException as e:
         return {"error": f"Execution failed: {repr(e)}"}
+
+class KeyMetrics(TypedDict):
+    market_cap: float 
+    pe_ratio: float 
+    forward_pe_ratio: float 
+    eps: float 
+    revenues: float 
+    profit_margin: float 
+    debt_to_equity: float
+    current_ratio: float 
+
+@tool
+def get_financials(ticker: str) -> str:
+    """
+    Fetches the current and historical financial statements for one single stock, given the stock ticker, and returns a JSON string containing:
+    - "balance sheet": A Table containing information on the Balance Sheet
+    - "income statement": A Table containing information on the Income Statement
+    - "cash flow": A Table containing information on the Cash Flow Statement
+    - "metrics": A Dictionary containing key financial metrics and ratios such as price to earnings ratio, leverage ratio
+
+    **Only choose this tool if the user asks for financial statements or ratios.**
+    """
+    try:
+        stock = yf.Ticker(ticker)
+        financials = {
+            "balance sheet": stock.balance_sheet.to_dict(),
+            "income statement": stock.financials.to_dict(),
+            "cash flow": stock.cashflow.to_dict(),
+        }
+
+        financials["balance sheet"] = {
+            key.strftime("%Y-%m-%d"): financials["balance sheet"][key]
+            for key in financials["balance sheet"]
+        }
+        financials["income statement"] = {
+            key.strftime("%Y-%m-%d"): financials["income statement"][key]
+            for key in financials["income statement"]
+        }
+        financials["cash flow"] = {
+            key.strftime("%Y-%m-%d"): financials["cash flow"][key]
+            for key in financials["cash flow"]
+        }
+
+        info = stock.info
+        # Ensure info is not empty
+        if not info:
+            print(f"No financial metrics available for {ticker}")
+            return financials
+
+        financials["key_metrics"] = KeyMetrics(
+            market_cap=info.get("marketCap", 0.0),
+            pe_ratio=info.get("trailingPE", 0.0),
+            forward_pe_ratio=info.get("forwardPE", 0.0),
+            eps=info.get("trailingEps", 0.0),
+            profit_margin=info.get("profitMargins", 0.0),
+            debt_to_equity=info.get("debtToEquity", 0.0),
+            current_ratio=info.get("currentRatio", 0.0),
+        )
+
+        return json.dumps(financials)
+    except Exception as e:
+        return json.dumps({"error": str(e)})

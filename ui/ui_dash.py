@@ -58,14 +58,16 @@ app.layout = html.Div(
                         html.Div(
                             # Pre-populate with empty div to prevent automatic execution
                             [html.Div(style={"display": "none"})],
-                            id="questions-area", 
-                            className="questions-area"
+                            id="questions-area",
+                            className="questions-area",
                         ),
                         # Loading indicator
                         html.Div(
                             [
                                 html.Div(className="loading-circle"),
-                                html.Div("Processing query...", className="loading-text"),
+                                html.Div(
+                                    "Processing query...", className="loading-text"
+                                ),
                             ],
                             id="loading-indicator",
                             className="loading-container",
@@ -444,50 +446,51 @@ def call_backend(query: str, session_id: str = "") -> Dict[str, Any]:
     Includes session ID to maintain state between requests.
     """
     try:
-        logger.info(f"Sending request to backend at {API_URL}/chat with session_id: {session_id}")
-        
+        logger.info(
+            f"Sending request to backend at {API_URL}/chat with session_id: {session_id}"
+        )
+
         # Create payload with query and session ID
-        payload = {
-            "query": query,
-            "session_id": session_id
-        }
-        
+        payload = {"query": query, "session_id": session_id}
+
         response = requests.post(
             f"{API_URL}/chat",
             json=payload,
-            timeout=60  # Set a timeout of 60 seconds for longer queries
+            timeout=60,  # Set a timeout of 60 seconds for longer queries
         )
         response.raise_for_status()
-        
-        logger.info(f"Received successful response from backend (status code: {response.status_code})")
+
+        logger.info(
+            f"Received successful response from backend (status code: {response.status_code})"
+        )
         return response.json()
     except requests.exceptions.Timeout:
         logger.error("Backend request timed out after 60 seconds")
         return {
             "text": "Sorry, the request took too long to process. Please try a simpler query or try again later.",
             "charts_data": "{}",
-            "session_id": session_id
+            "session_id": session_id,
         }
     except requests.exceptions.ConnectionError:
         logger.error(f"Connection error when contacting backend at {API_URL}")
         return {
             "text": "Sorry, I couldn't connect to the backend server. Please check that the API is running.",
             "charts_data": "{}",
-            "session_id": session_id
+            "session_id": session_id,
         }
     except requests.exceptions.RequestException as e:
         logger.error(f"Request error when calling backend: {str(e)}")
         return {
             "text": f"Sorry, I couldn't process your request due to a server error: {str(e)}",
             "charts_data": "{}",
-            "session_id": session_id
+            "session_id": session_id,
         }
     except Exception as e:
         logger.error(f"Unexpected error when calling backend: {str(e)}")
         return {
             "text": "Sorry, an unexpected error occurred while processing your request.",
             "charts_data": "{}",
-            "session_id": session_id
+            "session_id": session_id,
         }
 
 
@@ -500,38 +503,42 @@ def parse_response(response: Dict[str, Any]) -> Dict[str, Any]:
     text = response.get("text", "")
     charts = []
     session_id = response.get("session_id", "")
-    
+
     # Try to parse charts_data which is a JSON string
     charts_data = response.get("charts_data", "{}")
-    
+
     try:
         # Parse the JSON string into a dictionary
         if charts_data and charts_data != "{}":
             logger.info(f"Parsing charts_data: {charts_data[:100]}...")
             stock_data = json.loads(charts_data)
-            
+
             # Create a chart object in the format expected by generate_chart
             if "dates" in stock_data and "prices" in stock_data:
-                logger.info(f"Creating chart with {len(stock_data['dates'])} data points")
+                logger.info(
+                    f"Creating chart with {len(stock_data['dates'])} data points"
+                )
                 chart = {
                     "type": "line",
                     "title": "Stock Price Time Series",
                     "data": {
                         "Stock Price": {
                             "x": stock_data.get("dates", []),
-                            "y": stock_data.get("prices", [])
+                            "y": stock_data.get("prices", []),
                         }
-                    }
+                    },
                 }
                 charts.append(chart)
                 logger.info("Chart added successfully")
             else:
-                logger.warning(f"Missing 'dates' or 'prices' in stock_data: {list(stock_data.keys())}")
+                logger.warning(
+                    f"Missing 'dates' or 'prices' in stock_data: {list(stock_data.keys())}"
+                )
     except json.JSONDecodeError as e:
         logger.error(f"Error parsing charts_data: {e}")
     except Exception as e:
         logger.error(f"Error processing chart data: {str(e)}")
-    
+
     return {"text": text, "charts": charts, "session_id": session_id}
 
 
@@ -551,7 +558,7 @@ def initialize_question_buttons(_):
             n_clicks=0,
         )
         buttons.append(button)
-    
+
     logger.info(f"Generated {len(buttons)} question buttons")
     return buttons
 
@@ -601,24 +608,31 @@ def update_chat(
 ):
     # Get session ID if it exists
     session_id = session_data.get("session_id", "")
-    
+
     # Check which input triggered the callback
     ctx_msg = dash.callback_context
-    
+
     # Skip if no explicit trigger or during page load
     if not ctx_msg.triggered:
         logger.info("No trigger found, skipping callback")
-        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
-    
+        return (
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+        )
+
     # Get the ID of the button that triggered the callback
-    button_id = ctx_msg.triggered[0]['prop_id'].split('.')[0]
+    button_id = ctx_msg.triggered[0]["prop_id"].split(".")[0]
     logger.info(f"Button clicked: {button_id}")
-    
+
     # Initialize variables
     current_messages = current_messages or []
     chat_history = chat_history or {"messages": []}
     question = None
-    
+
     # Determine the question based on which button was clicked
     if button_id == "send-button" and send_clicks and send_clicks > 0 and input_value:
         question = input_value
@@ -626,7 +640,7 @@ def update_chat(
     elif "{" in button_id:  # This is a question button
         try:
             # Parse the button ID to get the index
-            button_dict = json.loads(button_id.replace("'", "\""))
+            button_dict = json.loads(button_id.replace("'", '"'))
             if button_dict.get("type") == "question-button":
                 index = button_dict.get("index", 0)
                 if index < len(EXAMPLE_QUESTIONS) and question_button_clicks[index] > 0:
@@ -634,21 +648,30 @@ def update_chat(
                     logger.info(f"Question button {index} clicked: {question}")
         except Exception as e:
             logger.error(f"Error parsing button ID: {e}")
-    
+
     # If no valid question, return unchanged
     if not question:
         logger.warning(f"No valid question found. Button ID: {button_id}")
-        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+        return (
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+        )
 
     # Update to show loading immediately - first update
     # Add user message to chat without waiting for API response
     user_message = html.Div(question, className="message user-message")
     updated_messages = current_messages + [user_message]
-    initial_chat_display = {"display": "block"} if current_messages else {"display": "block"}
-    
+    initial_chat_display = (
+        {"display": "block"} if current_messages else {"display": "block"}
+    )
+
     # Immediate loading state update
     loading_data = {"is_loading": True}
-    
+
     # Call backend for response
     logger.info(f"Calling backend API with query: {question}")
     response = call_backend(query=question, session_id=session_id)
@@ -679,7 +702,9 @@ def update_chat(
             html.Div(
                 children=chart_components,
                 className="charts-container",
-            ) if chart_components else None,
+            )
+            if chart_components
+            else None,
         ],
         className="message assistant-message",
     )
@@ -695,16 +720,16 @@ def update_chat(
             "charts": parsed_response.get("charts", []),
         }
     )
-    
+
     # Hide loading indicator
     loading_data = {"is_loading": False}
 
     # Show chat messages container
     logger.info("Returning updated chat interface")
     return (
-        updated_messages, 
-        chat_history, 
-        "", 
+        updated_messages,
+        chat_history,
+        "",
         {"display": "block"},
         loading_data,
         session_data,
@@ -723,7 +748,7 @@ def generate_chart(chart_data):
     chart_type = chart_data.get("type", "line")
     title = chart_data.get("title", "")
     data = chart_data.get("data", {})
-    
+
     logger.info(f"Generating chart of type: {chart_type}, title: {title}")
 
     fig = go.Figure()
@@ -733,15 +758,19 @@ def generate_chart(chart_data):
         for series_name, series_data in data.items():
             x_data = series_data.get("x", [])
             y_data = series_data.get("y", [])
-            
+
             # Validate data to ensure we have matching x and y data points
             if x_data and y_data and len(x_data) == len(y_data):
-                logger.info(f"Adding line series '{series_name}' with {len(x_data)} data points")
+                logger.info(
+                    f"Adding line series '{series_name}' with {len(x_data)} data points"
+                )
                 fig.add_trace(
                     go.Scatter(x=x_data, y=y_data, mode="lines", name=series_name)
                 )
             else:
-                logger.warning(f"Invalid data for series {series_name}: x={len(x_data)}, y={len(y_data)}")
+                logger.warning(
+                    f"Invalid data for series {series_name}: x={len(x_data)}, y={len(y_data)}"
+                )
 
     elif chart_type == "bar":
         # Bar chart for comparison data
@@ -773,7 +802,7 @@ def generate_chart(chart_data):
         font=dict(color="white"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
-    
+
     logger.info("Chart generation completed")
     return dcc.Graph(
         figure=fig, config={"displayModeBar": False}, style={"margin": "20px 0"}
@@ -876,7 +905,9 @@ app.clientside_callback(
         return window.dash_clientside.no_update;
     }
     """,
-    Output({"type": "question-button", "index": dash.ALL}, "n_clicks", allow_duplicate=True),
+    Output(
+        {"type": "question-button", "index": dash.ALL}, "n_clicks", allow_duplicate=True
+    ),
     Input({"type": "question-button", "index": dash.ALL}, "n_clicks"),
     State("dummy-div", "children"),
     prevent_initial_call=True,
