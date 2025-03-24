@@ -257,7 +257,7 @@ async def chat(request: ChatRequest):
         # Extract the response text from the messages
         response_text = "I couldn't process your request."
         if response.get("messages") and len(response["messages"]) > 0:
-            print(response.get("stock_ticker", "{}"))
+            logger.info(response.get("stock_ticker", "{}"))
             response_text = response["messages"][-1].content
             active_graphs[session_id]["message_history"].extend(response["messages"])
             active_graphs[session_id]["stock_data"] = response.get("stock_data", "{}")

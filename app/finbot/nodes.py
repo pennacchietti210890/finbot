@@ -153,11 +153,11 @@ def stock_price_node(state: State) -> Command[Literal["supervisor"]]:
     )
 
 
-def chart_node(state: State) -> Command[Literal["supervisor"]]:
-    logger.info("CHART NODE - Processing request")
+def stock_price_chart_node(state: State) -> Command[Literal["supervisor"]]:
+    logger.info("STOCK PRICE CHART NODE - Processing request")
     stock_data = state.get("stock_data", None)
     if not stock_data or "error" in stock_data:
-        logger.warning("CHART NODE - No valid stock data available to plot")
+        logger.warning("STOCK PRICE CHART NODE - No valid stock data available to plot")
         return Command(
             update={
                 "messages": [
@@ -171,7 +171,7 @@ def chart_node(state: State) -> Command[Literal["supervisor"]]:
             goto="supervisor",
         )
 
-    logger.info("CHART NODE - Data available for plotting")
+    logger.info("STOCK PRICE CHART NODE - Data available for plotting")
     return Command(
         update={
             "messages": [
@@ -204,3 +204,29 @@ def financials_node(state: State) -> Command[Literal["supervisor"]]:
         },
         goto="supervisor",
     )
+
+
+# def financials_chart_node(state: State) -> Command[Literal["supervisor"]]:
+#     logger.info("FINANCIALS CHART NODE - Processing request")
+#     fianncials_data = state.get("financials", None)
+    
+#     chart_statement_prompt = f"Fetch the financial statement from the user request. Can be one of the following: balance sheet, income statement, or cash flow. For example, if the user asks for 'Revenues', the correct response is 'income statement'."
+#     chart_statement_messages = state["messages"] + [
+#             {"role": "user", "content": chart_statement_prompt},
+#         ] 
+
+#     chart_statement_response = agents_llm.invoke(chart_statement_messages)
+
+#     chart_item_prompt = f"Fetch the financial item from the user request. Example if the user asks for 'create a chart of revenues over the last 2 years', the correct response is 'Revenues'."
+#     chart_item_messages = state["messages"] + [
+#             {"role": "user", "content": chart_item_prompt},
+#         ] 
+
+#     chart_item_response = agents_llm.invoke(chart_item_messages)
+
+#     logger.info(f"FINANCIALS CHART NODE - Chart statement response: {chart_statement_response}")
+#     logger.info(f"FINANCIALS CHART NODE - Chart item response: {chart_item_response}")
+
+#     return Command(
+#         goto=END,
+#     )
