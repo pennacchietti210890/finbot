@@ -147,6 +147,7 @@ async def chat(request: ChatRequest):
                 "message_history": [],
                 "stock_data": None,
                 "financials": None,
+                "stock_ticker": None,
             }
 
             # Create the initial state with the user's query
@@ -155,6 +156,7 @@ async def chat(request: ChatRequest):
                 next=None,
                 stock_data=None,
                 financials=None,
+                stock_ticker=None,
             )
 
             logger.info(f"SESSION {session_id} - INITIAL STATE:")
@@ -162,7 +164,7 @@ async def chat(request: ChatRequest):
             logger.info(f"Next: {initial_state['next']}")
             logger.info(f"Stock data: {initial_state['stock_data']}")
             logger.info(f"Financials: {initial_state['financials']}")
-
+            logger.info(f"Stock ticker: {initial_state['stock_ticker']}")
             # Process the user query through the LangGraph
             response = finbot_graph.invoke(
                 initial_state,
@@ -176,6 +178,7 @@ async def chat(request: ChatRequest):
             graph_message_history = session_data["message_history"]
             stock_data = session_data["stock_data"]
             financials = session_data["financials"]
+            stock_ticker = session_data["stock_ticker"]
             # Log current message history in session
             logger.info(f"SESSION {session_id} - CURRENT MESSAGE HISTORY:")
             logger.info(f"Message history length: {len(graph_message_history)}")
@@ -194,6 +197,7 @@ async def chat(request: ChatRequest):
                 next=None,  # Initialize next to None explicitly
                 stock_data=stock_data,
                 financials=financials,
+                stock_ticker=stock_ticker,
             )
 
             logger.info(f"SESSION {session_id} - INVOKING GRAPH WITH STATE:")
@@ -253,10 +257,13 @@ async def chat(request: ChatRequest):
         # Extract the response text from the messages
         response_text = "I couldn't process your request."
         if response.get("messages") and len(response["messages"]) > 0:
+            print(response.get("stock_ticker", "{}"))
             response_text = response["messages"][-1].content
             active_graphs[session_id]["message_history"].extend(response["messages"])
             active_graphs[session_id]["stock_data"] = response.get("stock_data", "{}")
             active_graphs[session_id]["financials"] = response.get("financials", "{}")
+            active_graphs[session_id]["stock_ticker"] = response.get("stock_ticker", "{}")
+            
         # Extract chart data from stock_data
         if response["messages"][-1].name == "chart":
             charts_data = response.get("stock_data", "{}")

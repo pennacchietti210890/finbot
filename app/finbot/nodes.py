@@ -30,7 +30,7 @@ class State(TypedDict):
     messages: Annotated[list, add_messages]
     stock_data: str
     financials: str
-    #stock_ticker: str
+    stock_ticker: str 
 
 
 def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
@@ -47,7 +47,8 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
     3. ONLY proceed to the next worker if it's truly necessary to complete the user's request.
     4. After chart is called, the request for stock price and charts should be considered complete - use FINISH.
     5. After financial_statements_and_metrics is called, the request for financial data should be considered complete - use FINISH.
-    6. If no more workers are needed or the request has been addressed, respond with FINISH.
+    6. If the user's request is about a different stock from what has been asked in the previous request, re-start the workflow with the new stock ticker.
+    7. If no more workers are needed or the request has been addressed, respond with FINISH.
     
     Current workers: {workers}
     """
@@ -75,6 +76,20 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
         ] 
 
         try:
+            logger.info(f"SUPERVISOR NODE - Previous Stock ticker: {state['stock_ticker']}")
+            ticker_response = llm.invoke(ticker_messages)
+            #if not state["stock_ticker"]:
+            state["stock_ticker"] = ticker_response.content
+            logger.info(f"SUPERVISOR NODE - Raw Ticker Response: {ticker_response}")
+            logger.info(f"SUPERVISOR NODE - Stock ticker: {state['stock_ticker']}")
+            if state["stock_ticker"] and state["stock_ticker"] != ticker_response.content:
+                logger.info(f"SUPERVISOR NODE - Stock ticker has changed. Restarting workflow with new ticker: {ticker_response.content}")
+                messages = [
+                    {"role": "system", "content": formatted_prompt},
+                ]
+                state["messages"] = messages
+
+
             logger.info("Calling LLM for routing decision...")
             response = llm.with_structured_output(Router).invoke(messages)
             logger.info(f"SUPERVISOR NODE - Raw Response: {response}")
@@ -106,7 +121,7 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
             else:
                 logger.info(f"Router selected next worker: {goto}")
             
-            return Command(goto=goto, update={"next": goto})
+            return Command(goto=goto, update={"next": goto, "stock_ticker": state["stock_ticker"]})
         except Exception as e:
             logger.error(f"Error in supervisor node: {str(e)}", exc_info=True)
             # If there's an error, default to ending the workflow
@@ -117,6 +132,7 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
 
 def stock_price_node(state: State) -> Command[Literal["supervisor"]]:
     logger.info("STOCK PRICE NODE - Processing request")
+
     stock_price_agent = create_stock_price_agent(agents_llm)
     result = stock_price_agent.invoke(state)
 
