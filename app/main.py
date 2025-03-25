@@ -79,6 +79,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     text: str
     charts_data: str = "{}"
+    financials_charts_data: str = "{}"
     session_id: str
 
 
@@ -267,15 +268,21 @@ async def chat(request: ChatRequest):
         # Extract chart data from stock_data
         if response["messages"][-1].name == "chart":
             charts_data = response.get("stock_data", "{}")
+            financials_charts_data = "{}"
             logger.info(f"Chart data detected, size: {len(str(charts_data))} chars")
+        elif response["messages"][-1].name == "financials_chart":
+            charts_data = "{}"
+            financials_charts_data = response.get("financials_chart_data", "{}")
+            logger.info(f"Financials chart data detected, size: {len(str(financials_charts_data))} chars")
         else:
             charts_data = "{}"
+            financials_charts_data = "{}"
             logger.info("No chart data in response")
 
         logger.info(f"Response processed: {response_text[:50]}...")
 
         return ChatResponse(
-            text=response_text, charts_data=charts_data, session_id=session_id
+            text=response_text, charts_data=charts_data, financials_charts_data=financials_charts_data, session_id=session_id
         )
     except Exception as e:
         logger.error(f"Error processing query: {str(e)}")

@@ -7,10 +7,12 @@ from langgraph.graph import StateGraph, MessagesState, START, END
 from langchain_groq import ChatGroq
 from typing import TypedDict, Annotated, Literal
 from app.llm.llm_service import LLMService
-from app.finbot.agents import create_stock_price_agent, create_financials_agent
+from app.finbot.agents import create_stock_price_agent, create_financials_agent, create_financials_chart_agent
+from pydantic import BaseModel, Field
 import os
 import logging
 from dotenv import load_dotenv
+import json
 
 # Get the logger for this module
 logger = logging.getLogger(__name__)
@@ -31,7 +33,7 @@ class State(TypedDict):
     stock_data: str
     financials: str
     stock_ticker: str 
-
+    financials_chart_data: str
 
 def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
     options = ["FINISH"] + members
@@ -206,27 +208,48 @@ def financials_node(state: State) -> Command[Literal["supervisor"]]:
     )
 
 
-# def financials_chart_node(state: State) -> Command[Literal["supervisor"]]:
-#     logger.info("FINANCIALS CHART NODE - Processing request")
-#     fianncials_data = state.get("financials", None)
+
+def financials_chart_node(state: State) -> Command[Literal["supervisor"]]:
+    logger.info("FINANCIALS CHART NODE - Processing request")
+    financials_data = state.get("financials", None)
+    financials_chart_agent = create_financials_chart_agent(agents_llm)
+
+    financials_chart_response = financials_chart_agent.invoke(state)
     
-#     chart_statement_prompt = f"Fetch the financial statement from the user request. Can be one of the following: balance sheet, income statement, or cash flow. For example, if the user asks for 'Revenues', the correct response is 'income statement'."
-#     chart_statement_messages = state["messages"] + [
-#             {"role": "user", "content": chart_statement_prompt},
-#         ] 
+    logger.info(f"FINANCIALS CHART NODE - Chart statement response: {financials_chart_response["structured_response"]}")
+    last_message = financials_chart_response["messages"][-1].content
+    financials_chart_data = financials_chart_response.get('structured_response', None)
 
-#     chart_statement_response = agents_llm.invoke(chart_statement_messages)
+    if not financials_chart_data:
+        logger.warning("FINANCIALS CHART NODE - No valid financials data available to plot")
+        return Command(
+            update={
+                "messages": [
+                    {
+                        "role": "assistant",
+                        "content": "No valid financials data available to plot.",
+                        "name": "financials_chart",
+                    }
+                ]
+            },
+            goto="supervisor",
+        )
 
-#     chart_item_prompt = f"Fetch the financial item from the user request. Example if the user asks for 'create a chart of revenues over the last 2 years', the correct response is 'Revenues'."
-#     chart_item_messages = state["messages"] + [
-#             {"role": "user", "content": chart_item_prompt},
-#         ] 
+    logger.info("FINANCIALS  CHART NODE - Data available for plotting")
+    return Command(
+        update={
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": "✅ Data is ready to be plotted.",
+                    "name": "financials_chart",
+                }
+            ],
+            "financials_chart_data": financials_chart_data.json(),
+        },
+        goto="supervisor",
+    )
 
-#     chart_item_response = agents_llm.invoke(chart_item_messages)
 
-#     logger.info(f"FINANCIALS CHART NODE - Chart statement response: {chart_statement_response}")
-#     logger.info(f"FINANCIALS CHART NODE - Chart item response: {chart_item_response}")
 
-#     return Command(
-#         goto=END,
-#     )
+
