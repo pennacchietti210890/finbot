@@ -506,6 +506,7 @@ def parse_response(response: Dict[str, Any]) -> Dict[str, Any]:
 
     # Try to parse charts_data which is a JSON string
     charts_data = response.get("charts_data", "{}")
+    financials_charts_data = response.get("financials_charts_data", "{}")
 
     try:
         # Parse the JSON string into a dictionary
@@ -530,9 +531,33 @@ def parse_response(response: Dict[str, Any]) -> Dict[str, Any]:
                 }
                 charts.append(chart)
                 logger.info("Chart added successfully")
+        elif financials_charts_data and financials_charts_data != "{}":
+            logger.info(f"Parsing financials_charts_data: {financials_charts_data[:100]}...")
+            financials_data = json.loads(financials_charts_data)
+            logger.info(f"Financials data: {financials_data}")
+            # Create a chart object in the format expected by generate_chart
+            if "dates" in financials_data and "values" in financials_data:
+                logger.info(
+                    f"Creating financials chart with {len(financials_data['dates'])} data points"
+                )
+                chart = {
+                    "type": "bar",
+                    "title": "Financials Time Series",
+                    "data": {
+                        "Financials Item": {
+                            "x": financials_data.get("dates", []),
+                            "y": financials_data.get("values", []),
+                        }
+                    },
+                }
+                charts.append(chart)
+                logger.info("Chart added successfully")
             else:
                 logger.warning(
                     f"Missing 'dates' or 'prices' in stock_data: {list(stock_data.keys())}"
+                )
+                logger.warning(
+                    f"Missing 'dates' or 'prices' in financials_data: {list(financials_data.keys())}"
                 )
     except json.JSONDecodeError as e:
         logger.error(f"Error parsing charts_data: {e}")
@@ -774,13 +799,18 @@ def generate_chart(chart_data):
 
     elif chart_type == "bar":
         # Bar chart for comparison data
-        categories = list(data.keys())
-        values = [data[category] for category in categories]
-        if categories and values:
-            logger.info(f"Adding bar chart with {len(categories)} categories")
-            fig.add_trace(go.Bar(x=categories, y=values))
-        else:
-            logger.warning("Empty data for bar chart")
+        for series_name, series_data in data.items():
+            x_data = series_data.get("x", [])
+            y_data = series_data.get("y", [])
+
+            if x_data and y_data and len(x_data) == len(y_data):
+                logger.info(
+                    f"Adding bar chart series '{series_name}' with {len(x_data)} data points"
+                )
+                logger.info(f"Adding bar chart")
+                fig.add_trace(go.Bar(x=x_data, y=y_data))
+            else:
+                logger.warning("Empty data for bar chart")
 
     elif chart_type == "pie":
         # Pie chart for distribution data

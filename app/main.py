@@ -280,6 +280,7 @@ async def chat(request: ChatRequest):
             logger.info("No chart data in response")
 
         logger.info(f"Response processed: {response_text[:50]}...")
+        logger.info(f"Inserting into Chat Response: {financials_charts_data}...")
 
         return ChatResponse(
             text=response_text, charts_data=charts_data, financials_charts_data=financials_charts_data, session_id=session_id
