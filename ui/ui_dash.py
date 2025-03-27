@@ -507,7 +507,7 @@ def parse_response(response: Dict[str, Any]) -> Dict[str, Any]:
     # Try to parse charts_data which is a JSON string
     charts_data = response.get("charts_data", "{}")
     financials_charts_data = response.get("financials_charts_data", "{}")
-
+    macroeconomics_charts_data = response.get("macroeconomics_charts_data", "{}")
     try:
         # Parse the JSON string into a dictionary
         if charts_data and charts_data != "{}":
@@ -531,8 +531,14 @@ def parse_response(response: Dict[str, Any]) -> Dict[str, Any]:
                 }
                 charts.append(chart)
                 logger.info("Chart added successfully")
-        elif financials_charts_data and financials_charts_data != "{}":
-            logger.info(f"Parsing financials_charts_data: {financials_charts_data[:100]}...")
+            else:
+                logger.warning(
+                    f"Missing 'dates' or 'prices' in stock_data: {list(stock_data.keys())}"
+                )
+        if financials_charts_data and financials_charts_data != "{}":
+            logger.info(
+                f"Parsing financials_charts_data: {financials_charts_data[:100]}..."
+            )
             financials_data = json.loads(financials_charts_data)
             logger.info(f"Financials data: {financials_data}")
             # Create a chart object in the format expected by generate_chart
@@ -554,10 +560,34 @@ def parse_response(response: Dict[str, Any]) -> Dict[str, Any]:
                 logger.info("Chart added successfully")
             else:
                 logger.warning(
-                    f"Missing 'dates' or 'prices' in stock_data: {list(stock_data.keys())}"
+                    f"Missing 'dates' or 'values' in financials_data: {list(financials_data.keys())}"
                 )
+        if macroeconomics_charts_data and macroeconomics_charts_data != "{}":
+            logger.info(
+                f"Parsing macroeconomics_charts_data: {macroeconomics_charts_data[:100]}..."
+            )
+            macroeconomics_data = json.loads(macroeconomics_charts_data)
+            logger.info(f"Macroeconomics data: {macroeconomics_data}")
+            # Create a chart object in the format expected by generate_char
+            if "dates" in macroeconomics_data and "values" in macroeconomics_data:
+                logger.info(
+                    f"Creating Macroeconomics chart with {len(macroeconomics_data['dates'])} data points"
+                )
+                chart = {
+                    "type": "line",
+                    "title": "Macroeconomics Time Series",
+                    "data": {
+                        "MacroEconomics Item": {
+                            "x": macroeconomics_data.get("dates", []),
+                            "y": macroeconomics_data.get("values", []),
+                        }
+                    },
+                }
+                charts.append(chart)
+                logger.info("Chart added successfully")
+            else:
                 logger.warning(
-                    f"Missing 'dates' or 'prices' in financials_data: {list(financials_data.keys())}"
+                    f"Missing 'dates' or 'values' in macroeconomics_data: {list(macroeconomics_data.keys())}"
                 )
     except json.JSONDecodeError as e:
         logger.error(f"Error parsing charts_data: {e}")

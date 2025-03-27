@@ -7,8 +7,15 @@ from langchain_experimental.utilities import PythonREPL
 from langchain_core.tools import tool
 
 import yfinance as yf
+import pandas_datareader as pdr
 import json
+import os
+from dotenv import load_dotenv
 
+env_path = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"
+)
+load_dotenv(env_path)
 
 @tool
 def get_historical_prices(ticker: str, day: int = 365) -> str:
@@ -68,15 +75,17 @@ def python_repl_tool(
     except BaseException as e:
         return {"error": f"Execution failed: {repr(e)}"}
 
+
 class KeyMetrics(TypedDict):
-    market_cap: float 
-    pe_ratio: float 
-    forward_pe_ratio: float 
-    eps: float 
-    revenues: float 
-    profit_margin: float 
+    market_cap: float
+    pe_ratio: float
+    forward_pe_ratio: float
+    eps: float
+    revenues: float
+    profit_margin: float
     debt_to_equity: float
-    current_ratio: float 
+    current_ratio: float
+
 
 @tool
 def get_financials(ticker: str) -> str:
@@ -127,5 +136,64 @@ def get_financials(ticker: str) -> str:
         )
 
         return json.dumps(financials)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@tool
+def get_macroeconomic_series(
+    macro_indicator: str, start_year: str, end_year: str) -> str:
+    """
+    Fetches the a time series for the chosen macro economic indicator from FRED API.
+
+    Args:
+    macro_indicator: The MacroEconomic data series to fetch from FRED API
+    start_year: Start Year for the data series, in format YYYY
+    end_year: End year for the data series, in format YYYY
+
+    The Macro Economic indicators available, and their meaning, are listed in the below list:
+
+     'GDPC1': 'Real Gross Domestic Product',
+     'UNRATE': 'Unemployment Rate',
+     'DGS10': '10-Year Treasury Constant Maturity Rate',
+     'M2SL': 'M2 Money stock',
+     'WALCL': 'Weekly FED Balance sheet total assets',
+     'TREAST': 'USTs holdings at the FED',
+     'MBST': 'MBS Holdings of the FED',
+     'RESBALNS': 'Reserve Balances held at the FED',
+     'BOPGSTB': 'Trade Balance of goods and services',
+     'IEABC': 'Total value of imports',
+     'IEABCEX': 'Total value of exports',
+     'NAPM': 'ISM Manufacturing PMI',
+     'INDPRO': 'Industrial Production Index',
+     'IPMAN': 'Manufacturing Output',
+     'DGORDER': 'Durable Goods Orders',
+     'NHSL': 'New Home Sales',
+     'EXHOSLUSM495S': 'Existing Home Sales',
+     'PHSI': 'Pending Home Sales Index',
+     'HOUST': 'Total Housing Starts',
+     'PERMIT': 'Building Permits',
+     'FGRECPT': 'Federal Government Tax Receipts',
+     'FGEXPND': 'Federal Government Tax Expenditures',
+     'MTSDS133FMS': 'Federal Government Budget Surplus (or Deficit)',
+     'GFDEBTN': 'Federal Debt (Total Public Debt)',
+     'FGRECPT_ALT': 'Federal Government Receipts: Budget Receipts',
+     'A091RC1Q027SBEA': 'Federal Government Current Expenditures: Interest Payments'
+
+    Output:
+        Dictionary object of Dates:Values for the desired data series
+    """
+    try:
+        macro_data = pdr.get_data_fred(macro_indicator, start_year, end_year)
+
+        if macro_data.shape[0] == 0:
+            return json.dumps({"error": "No data available"})
+
+        macro_dict = {
+            "dates": [ts.strftime("%Y-%m-%d") for ts in list(macro_data.index)],
+            "values": [float(val[0]) for val in macro_data.values],
+        }
+
+        return json.dumps(macro_dict)
     except Exception as e:
         return json.dumps({"error": str(e)})

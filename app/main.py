@@ -80,6 +80,7 @@ class ChatResponse(BaseModel):
     text: str
     charts_data: str = "{}"
     financials_charts_data: str = "{}"
+    macroeconomics_charts_data: str = "{}"
     session_id: str
 
 
@@ -149,6 +150,7 @@ async def chat(request: ChatRequest):
                 "stock_data": None,
                 "financials": None,
                 "stock_ticker": None,
+                "macroeconomics_data": None,
             }
 
             # Create the initial state with the user's query
@@ -158,6 +160,7 @@ async def chat(request: ChatRequest):
                 stock_data=None,
                 financials=None,
                 stock_ticker=None,
+                macroeconomics_data=None,
             )
 
             logger.info(f"SESSION {session_id} - INITIAL STATE:")
@@ -166,6 +169,7 @@ async def chat(request: ChatRequest):
             logger.info(f"Stock data: {initial_state['stock_data']}")
             logger.info(f"Financials: {initial_state['financials']}")
             logger.info(f"Stock ticker: {initial_state['stock_ticker']}")
+            logger.info(f"Macroeconomics data: {initial_state['macroeconomics_data']}")
             # Process the user query through the LangGraph
             response = finbot_graph.invoke(
                 initial_state,
@@ -180,6 +184,7 @@ async def chat(request: ChatRequest):
             stock_data = session_data["stock_data"]
             financials = session_data["financials"]
             stock_ticker = session_data["stock_ticker"]
+            macroeconomics_data = session_data["macroeconomics_data"]
             # Log current message history in session
             logger.info(f"SESSION {session_id} - CURRENT MESSAGE HISTORY:")
             logger.info(f"Message history length: {len(graph_message_history)}")
@@ -193,12 +198,13 @@ async def chat(request: ChatRequest):
 
             # Create state for this invocation - must include all keys from the State type
             invoke_state = State(
-                messages=convert_messages_to_openai_format(graph_message_history) + [{"role": "user", "content": request.query}],
-                #[{"role": "user", "content": request.query}],
+                messages=convert_messages_to_openai_format(graph_message_history)
+                + [{"role": "user", "content": request.query}],
                 next=None,  # Initialize next to None explicitly
                 stock_data=stock_data,
                 financials=financials,
                 stock_ticker=stock_ticker,
+                macroeconomics_data=macroeconomics_data,
             )
 
             logger.info(f"SESSION {session_id} - INVOKING GRAPH WITH STATE:")
@@ -207,6 +213,8 @@ async def chat(request: ChatRequest):
             logger.info(f"Stock data: {stock_data}")
             logger.info(f"Financials data present: {financials is not None}")
             logger.info(f"Financials data: {financials}")
+            logger.info(f"Macroeconomics data present: {macroeconomics_data is not None}")
+            logger.info(f"Macroeconomics data: {macroeconomics_data}")
             logger.info(
                 f"Next value: {invoke_state.get('next')}"
             )  # Log the 'next' value
@@ -255,6 +263,18 @@ async def chat(request: ChatRequest):
                 else financials_str
             )
 
+        # Log Macroeconomics data
+        if "macroeconomics_data" in response:
+            macroeconomics_str = str(response.get("macroeconomics_data", ""))
+            logger.info(
+                f"Macroeconomics data available: {bool(macroeconomics_str and macroeconomics_str != '{}')}"
+            )
+            logger.info(
+                f"Macroeconomics data preview: {macroeconomics_str[:100]}..."
+                if macroeconomics_str and len(macroeconomics_str) > 100
+                else macroeconomics_str
+            )
+
         # Extract the response text from the messages
         response_text = "I couldn't process your request."
         if response.get("messages") and len(response["messages"]) > 0:
@@ -263,27 +283,49 @@ async def chat(request: ChatRequest):
             active_graphs[session_id]["message_history"].extend(response["messages"])
             active_graphs[session_id]["stock_data"] = response.get("stock_data", "{}")
             active_graphs[session_id]["financials"] = response.get("financials", "{}")
-            active_graphs[session_id]["stock_ticker"] = response.get("stock_ticker", "{}")
-            
+            active_graphs[session_id]["stock_ticker"] = response.get(
+                "stock_ticker", "{}"
+            )
+            active_graphs[session_id]["macroeconomics_data"] = response.get(
+                "macroeconomics_data", "{}"
+            )
+
         # Extract chart data from stock_data
-        if response["messages"][-1].name == "chart":
+        if response["messages"][-1].name == "stock_price_chart":
             charts_data = response.get("stock_data", "{}")
             financials_charts_data = "{}"
+            macroeconomics_charts_data = "{}"
             logger.info(f"Chart data detected, size: {len(str(charts_data))} chars")
         elif response["messages"][-1].name == "financials_chart":
             charts_data = "{}"
+            macroeconomics_charts_data = "{}"
             financials_charts_data = response.get("financials_chart_data", "{}")
-            logger.info(f"Financials chart data detected, size: {len(str(financials_charts_data))} chars")
+            logger.info(
+                f"Financials chart data detected, size: {len(str(financials_charts_data))} chars"
+            )
+            logger.info(f"Financials chart data: {financials_charts_data}")
+        elif response["messages"][-1].name == "macroeconomics_chart":
+            charts_data = "{}"
+            financials_charts_data = "{}"
+            macroeconomics_charts_data = response.get("macroeconomics_data", "{}")
+            logger.info(
+                f"Macroeconomics chart data detected, size: {len(str(macroeconomics_charts_data))} chars"
+            )
+            logger.info(f"Macroeconomics chart data: {macroeconomics_charts_data}")
         else:
             charts_data = "{}"
             financials_charts_data = "{}"
+            macroeconomics_charts_data = "{}"
             logger.info("No chart data in response")
 
         logger.info(f"Response processed: {response_text[:50]}...")
-        logger.info(f"Inserting into Chat Response: {financials_charts_data}...")
 
         return ChatResponse(
-            text=response_text, charts_data=charts_data, financials_charts_data=financials_charts_data, session_id=session_id
+            text=response_text,
+            charts_data=charts_data,
+            financials_charts_data=financials_charts_data,
+            macroeconomics_charts_data=macroeconomics_charts_data,
+            session_id=session_id,
         )
     except Exception as e:
         logger.error(f"Error processing query: {str(e)}")
