@@ -68,7 +68,7 @@ app.add_middleware(
 )
 
 # Store active graphs by session ID
-active_graphs = {}
+active_graph_config = {}
 
 
 class ChatRequest(BaseModel):
@@ -124,106 +124,34 @@ async def chat(request: ChatRequest):
     """
     # Process the user query through the LangGraph
     logger.info(f"Processing query: {request.query}")
+    
     try:
         # Get or create session ID
         session_id = request.session_id
-        if not session_id:
+        if not session_id:  
             session_id = str(uuid.uuid4())
             logger.info(f"Created new session ID: {session_id}")
-        else:
-            logger.info(f"Using existing session ID: {session_id}")
-
-        # Get or create graph for this session
-        if session_id not in active_graphs:
-            logger.info(f"Creating new graph for session {session_id}")
+            logger.info(f"Creating graph...")
             finbot_graph = create_graph(
-                LLMService(
-                    llm_provider="openai",
-                    model_name="gpt-4o-mini",
-                    api_key=os.getenv("OPENAI_API_KEY"),
-                ).client
+                    LLMService(
+                        llm_provider="openai",
+                        model_name="gpt-4o-mini",
+                        api_key=os.getenv("OPENAI_API_KEY"),
+                    ).client
             )
-            # Store [graph, message_history, last_state, stock_data]
-            active_graphs[session_id] = {
-                "graph": finbot_graph,
-                "message_history": [],
-                "stock_data": None,
-                "financials": None,
-                "stock_ticker": None,
-                "macroeconomics_data": None,
-            }
-
-            # Create the initial state with the user's query
-            initial_state = State(
-                messages=[{"role": "user", "content": request.query}],
-                next=None,
-                stock_data=None,
-                financials=None,
-                stock_ticker=None,
-                macroeconomics_data=None,
-            )
-
-            logger.info(f"SESSION {session_id} - INITIAL STATE:")
-            logger.info(f"Messages: {json.dumps(initial_state['messages'])}")
-            logger.info(f"Next: {initial_state['next']}")
-            logger.info(f"Stock data: {initial_state['stock_data']}")
-            logger.info(f"Financials: {initial_state['financials']}")
-            logger.info(f"Stock ticker: {initial_state['stock_ticker']}")
-            logger.info(f"Macroeconomics data: {initial_state['macroeconomics_data']}")
-            # Process the user query through the LangGraph
-            response = finbot_graph.invoke(
-                initial_state,
-                {"recursion_limit": 100},
-            )
-
+            logger.info(f"Creating new graph Config for new session ID: {session_id}")
+            session_config = {"configurable": {"thread_id": f"{session_id}"}}
+            active_graph_config[session_id] = [session_config, finbot_graph]
         else:
-            logger.info(f"Using existing graph for session {session_id}")
-            session_data = active_graphs[session_id]
-            finbot_graph = session_data["graph"]
-            graph_message_history = session_data["message_history"]
-            stock_data = session_data["stock_data"]
-            financials = session_data["financials"]
-            stock_ticker = session_data["stock_ticker"]
-            macroeconomics_data = session_data["macroeconomics_data"]
-            # Log current message history in session
-            logger.info(f"SESSION {session_id} - CURRENT MESSAGE HISTORY:")
-            logger.info(f"Message history length: {len(graph_message_history)}")
-            for i, msg in enumerate(graph_message_history):
-                if hasattr(msg, "content"):
-                    logger.info(
-                        f"Message {i + 1}: Role={msg.type if hasattr(msg, 'type') else 'unknown'}, Content={msg.content[:100]}..."
-                    )
-                else:
-                    logger.info(f"Message {i + 1}: {str(msg)[:100]}...")
+            session_config = active_graph_config[session_id][0]
+            finbot_graph = active_graph_config[session_id][1]
+            logger.info(f"Using existing config for session ID: {session_config}")
 
-            # Create state for this invocation - must include all keys from the State type
-            invoke_state = State(
-                messages=convert_messages_to_openai_format(graph_message_history)
-                + [{"role": "user", "content": request.query}],
-                next=None,  # Initialize next to None explicitly
-                stock_data=stock_data,
-                financials=financials,
-                stock_ticker=stock_ticker,
-                macroeconomics_data=macroeconomics_data,
-            )
-
-            logger.info(f"SESSION {session_id} - INVOKING GRAPH WITH STATE:")
-            logger.info(f"Last user message: {request.query}")
-            logger.info(f"Stock data present: {stock_data is not None}")
-            logger.info(f"Stock data: {stock_data}")
-            logger.info(f"Financials data present: {financials is not None}")
-            logger.info(f"Financials data: {financials}")
-            logger.info(f"Macroeconomics data present: {macroeconomics_data is not None}")
-            logger.info(f"Macroeconomics data: {macroeconomics_data}")
-            logger.info(
-                f"Next value: {invoke_state.get('next')}"
-            )  # Log the 'next' value
-
-            # Process the user query through the LangGraph
-            response = finbot_graph.invoke(
-                invoke_state,
-                {"recursion_limit": 100},
-            )
+        # Process the user query through the LangGraph
+        response = finbot_graph.invoke(
+            {"messages":[{"role": "user", "content": request.query}]},
+            config=session_config,
+        )
 
         # Log the response state
         logger.info(f"SESSION {session_id} - GRAPH RESPONSE STATE:")
@@ -280,15 +208,7 @@ async def chat(request: ChatRequest):
         if response.get("messages") and len(response["messages"]) > 0:
             logger.info(response.get("stock_ticker", "{}"))
             response_text = response["messages"][-1].content
-            active_graphs[session_id]["message_history"].extend(response["messages"])
-            active_graphs[session_id]["stock_data"] = response.get("stock_data", "{}")
-            active_graphs[session_id]["financials"] = response.get("financials", "{}")
-            active_graphs[session_id]["stock_ticker"] = response.get(
-                "stock_ticker", "{}"
-            )
-            active_graphs[session_id]["macroeconomics_data"] = response.get(
-                "macroeconomics_data", "{}"
-            )
+
 
         # Extract chart data from stock_data
         if response["messages"][-1].name == "stock_price_chart":

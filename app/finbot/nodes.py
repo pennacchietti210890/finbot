@@ -83,9 +83,10 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
         ]
 
         try:
-            logger.info(
-                f"SUPERVISOR NODE - Previous Stock ticker: {state['stock_ticker']}"
-            )
+            if "stock_ticker" in state:
+                logger.info(
+                    f"SUPERVISOR NODE - Previous Stock ticker: {state['stock_ticker']}"
+                )
             ticker_response = llm.invoke(ticker_messages)
             # if not state["stock_ticker"]:
             state["stock_ticker"] = ticker_response.content

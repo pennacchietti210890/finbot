@@ -9,7 +9,7 @@ from app.finbot.nodes import (
     macroeconomics_node,
 )
 from langgraph.graph import StateGraph, START
-
+from langgraph.checkpoint.memory import MemorySaver
 
 def create_graph(llm):
     stock_supervisor_node = make_supervisor_node(
@@ -34,6 +34,7 @@ def create_graph(llm):
     finbot_builder.add_node("macroeconomics_chart", macroeconomics_chart_node)
 
     finbot_builder.add_edge(START, "supervisor")
-    finbot_graph = finbot_builder.compile()
+    memory_saver = MemorySaver()
+    finbot_graph = finbot_builder.compile(checkpointer=memory_saver)
 
     return finbot_graph
