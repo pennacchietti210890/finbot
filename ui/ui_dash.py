@@ -425,6 +425,124 @@ app.index_string = """
                 border-bottom: 3px solid #00aa66;
                 text-shadow: 0 0 8px rgba(0, 255, 170, 0.7);
             }
+            
+            /* Markdown Content Styles */
+            .markdown-content {
+                margin: 0;
+                padding: 0;
+            }
+            
+            .markdown-content code {
+                background-color: rgba(0, 10, 5, 0.5);
+                padding: 2px 4px;
+                border-radius: 3px;
+                font-family: monospace;
+                color: #00ff88;
+                border: 1px solid rgba(0, 255, 136, 0.2);
+            }
+            
+            .markdown-content pre {
+                background-color: rgba(0, 10, 5, 0.7);
+                padding: 10px;
+                border-radius: 5px;
+                overflow-x: auto;
+                border: 1px solid rgba(0, 255, 136, 0.3);
+                margin: 10px 0;
+            }
+            
+            .markdown-content h1, 
+            .markdown-content h2, 
+            .markdown-content h3, 
+            .markdown-content h4 {
+                color: #00ff88;
+                margin: 15px 0 5px 0;
+                font-family: 'Orbitron', sans-serif;
+                font-weight: 500;
+                text-shadow: 0 0 5px rgba(0, 255, 136, 0.5);
+            }
+            
+            .markdown-content h1 {
+                font-size: 1.5em;
+                border-bottom: 1px solid rgba(0, 255, 136, 0.3);
+                padding-bottom: 5px;
+            }
+            
+            .markdown-content h2 {
+                font-size: 1.3em;
+            }
+            
+            .markdown-content h3 {
+                font-size: 1.1em;
+            }
+            
+            .markdown-content em {
+                color: #b3ffdb;
+                font-style: italic;
+            }
+            
+            .markdown-content strong {
+                color: #80ffc9;
+                font-weight: bold;
+                text-shadow: 0 0 3px rgba(0, 255, 136, 0.4);
+            }
+            
+            .markdown-content ul, 
+            .markdown-content ol {
+                margin: 5px 0 5px 20px;
+                padding: 0;
+            }
+            
+            .markdown-content li {
+                margin: 3px 0;
+            }
+            
+            .markdown-content blockquote {
+                border-left: 3px solid #00ff88;
+                margin: 10px 0;
+                padding-left: 10px;
+                color: #b3ffdb;
+                font-style: italic;
+            }
+            
+            .markdown-content table {
+                border-collapse: collapse;
+                margin: 10px 0;
+                width: 100%;
+                background-color: rgba(0, 10, 5, 0.3);
+            }
+            
+            .markdown-content th, 
+            .markdown-content td {
+                border: 1px solid rgba(0, 255, 136, 0.3);
+                padding: 5px 8px;
+                text-align: left;
+            }
+            
+            .markdown-content th {
+                background-color: rgba(0, 255, 136, 0.15);
+                color: #00ff88;
+                font-weight: bold;
+            }
+            
+            .markdown-content a {
+                color: #00ffcc;
+                text-decoration: none;
+                border-bottom: 1px dashed rgba(0, 255, 204, 0.5);
+                transition: all 0.2s ease-in-out;
+            }
+            
+            .markdown-content a:hover {
+                color: #80ffe6;
+                border-bottom: 1px solid rgba(0, 255, 204, 0.8);
+                text-shadow: 0 0 5px rgba(0, 255, 204, 0.5);
+            }
+            
+            /* Divider */
+            .markdown-content hr {
+                border: none;
+                border-top: 1px dashed rgba(0, 255, 136, 0.3);
+                margin: 15px 0;
+            }
         </style>
     </head>
     <body>
@@ -467,28 +585,31 @@ def call_backend(query: str, session_id: str = "") -> Dict[str, Any]:
     except requests.exceptions.Timeout:
         logger.error("Backend request timed out after 60 seconds")
         return {
-            "text": "Sorry, the request took too long to process. Please try a simpler query or try again later.",
+            "text": "**Error:** Sorry, the request took too long to process. Please try a simpler query or try again later.",
             "charts_data": "{}",
             "session_id": session_id,
         }
     except requests.exceptions.ConnectionError:
         logger.error(f"Connection error when contacting backend at {API_URL}")
         return {
-            "text": "Sorry, I couldn't connect to the backend server. Please check that the API is running.",
+            "text": "**Error:** Sorry, I couldn't connect to the backend server. Please check that the API is running.\n\n"
+                   "Make sure the backend is running with `cd app && python -m main`.",
             "charts_data": "{}",
             "session_id": session_id,
         }
     except requests.exceptions.RequestException as e:
         logger.error(f"Request error when calling backend: {str(e)}")
         return {
-            "text": f"Sorry, I couldn't process your request due to a server error: {str(e)}",
+            "text": f"**Error:** Sorry, I couldn't process your request due to a server error:\n\n"
+                   f"`{str(e)}`",
             "charts_data": "{}",
             "session_id": session_id,
         }
     except Exception as e:
         logger.error(f"Unexpected error when calling backend: {str(e)}")
         return {
-            "text": "Sorry, an unexpected error occurred while processing your request.",
+            "text": f"**Error:** Sorry, an unexpected error occurred while processing your request.\n\n"
+                   f"Error details: `{str(e)}`",
             "charts_data": "{}",
             "session_id": session_id,
         }
@@ -717,8 +838,20 @@ def update_chat(
         )
 
     # Update to show loading immediately - first update
-    # Add user message to chat without waiting for API response
-    user_message = html.Div(question, className="message user-message")
+    # Add user message to chat
+    user_message = html.Div(
+        dcc.Markdown(
+            question,
+            className="markdown-content user-markdown",
+            style={
+                "color": "#7fffcf",
+                "textAlign": "right",
+                "wordBreak": "break-word",
+                "whiteSpace": "normal"
+            }
+        ),
+        className="message user-message",
+    )
     updated_messages = current_messages + [user_message]
     initial_chat_display = (
         {"display": "block"} if current_messages else {"display": "block"}
@@ -752,7 +885,16 @@ def update_chat(
     # Add assistant message to chat
     assistant_message = html.Div(
         [
-            html.P(parsed_response["text"]),
+            dcc.Markdown(
+                parsed_response["text"],
+                dangerously_allow_html=True,
+                className="markdown-content",
+                style={
+                    "color": "white",
+                    "wordBreak": "break-word",
+                    "whiteSpace": "normal"
+                }
+            ),
             # Add charts container if there are charts
             html.Div(
                 children=chart_components,
