@@ -7,6 +7,7 @@ from app.finbot.nodes import (
     financials_chart_node,
     macroeconomics_chart_node,
     macroeconomics_node,
+    news_search_node,
 )
 from langgraph.graph import StateGraph, START
 from langgraph.checkpoint.memory import MemorySaver
@@ -21,6 +22,7 @@ def create_graph(llm):
             "financials_chart",
             "macroeconomics",
             "macroeconomics_chart",
+            "news_search",
         ],
     )
 
@@ -32,7 +34,7 @@ def create_graph(llm):
     finbot_builder.add_node("financials_chart", financials_chart_node)
     finbot_builder.add_node("macroeconomics", macroeconomics_node)
     finbot_builder.add_node("macroeconomics_chart", macroeconomics_chart_node)
-
+    finbot_builder.add_node("news_search", news_search_node)
     finbot_builder.add_edge(START, "supervisor")
     memory_saver = MemorySaver()
     finbot_graph = finbot_builder.compile(checkpointer=memory_saver)

@@ -12,6 +12,7 @@ from app.finbot.agents import (
     create_financials_agent,
     create_financials_chart_agent,
     create_macroeconomics_agent,
+    create_news_search_agent,
 )
 from pydantic import BaseModel, Field
 import os
@@ -321,6 +322,21 @@ def macroeconomics_chart_node(state: State) -> Command[Literal["supervisor"]]:
                 }
             ],
             "macroeconomics_data": macroeconomics_data,
+        },
+        goto="supervisor",
+    )
+
+
+def news_search_node(state: State) -> Command[Literal["supervisor"]]:
+    logger.info("NEWS SEARCH NODE - Processing request")
+    news_search_agent = create_news_search_agent(agents_llm)
+    result = news_search_agent.invoke(state)
+    
+    return Command(
+        update={
+            "messages": [
+                HumanMessage(content= result["messages"][-1].content, name="news_search")
+            ],
         },
         goto="supervisor",
     )

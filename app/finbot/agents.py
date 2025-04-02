@@ -7,6 +7,7 @@ from app.finbot.tools import (
 from langchain_core.language_models.chat_models import BaseChatModel
 from pydantic import BaseModel, Field
 from typing import List
+from app.finbot.tools import search_tool
 
 
 def create_stock_price_agent(llm: BaseChatModel):
@@ -51,3 +52,10 @@ def create_financials_chart_agent(llm: BaseChatModel):
         response_format=FinancialsChartStruct,
     )
     return financials_chart_agent
+
+def create_news_search_agent(llm: BaseChatModel):
+    news_search_agent = create_react_agent(
+        llm,
+        tools=[search_tool],
+    )
+    return news_search_agent

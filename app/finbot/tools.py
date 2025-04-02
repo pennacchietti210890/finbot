@@ -12,6 +12,8 @@ import json
 import os
 from dotenv import load_dotenv
 
+from langchain_tavily import TavilySearch
+
 env_path = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"
 )
@@ -197,3 +199,9 @@ def get_macroeconomic_series(
         return json.dumps(macro_dict)
     except Exception as e:
         return json.dumps({"error": str(e)})
+
+
+search_tool = TavilySearch(
+    max_results=3,
+    topic="general",
+)
