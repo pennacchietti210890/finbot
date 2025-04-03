@@ -10,9 +10,21 @@ import yfinance as yf
 import pandas_datareader as pdr
 import json
 import os
+import time
+import logging
 from dotenv import load_dotenv
+import shutil
 
 from langchain_tavily import TavilySearch
+
+from sec_edgar_downloader import Downloader
+from datetime import date
+from bs4 import BeautifulSoup
+
+from app.llm.rag_query_engine import RAGEngine
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 env_path = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"
@@ -205,3 +217,55 @@ search_tool = TavilySearch(
     max_results=3,
     topic="general",
 )
+
+
+@tool
+def get_annual_report(ticker: str) -> str:
+    """
+    Fetches the latest annual report for one stock, given the stock ticker, and return a string containing the text content of the report
+
+    **Only choose this tool if the user asks questions about a company's or stock annual report (also known as 10k).**
+    """
+    try:
+        # Import here to avoid circular imports
+        from app.finbot.services import RAGEngineService
+        
+        rag_service = RAGEngineService.get_instance()
+        
+        # Check if we already have a RAG engine for this ticker
+        if rag_service.has_engine(ticker):
+            return f"Annual report for {ticker} is already loaded and ready for querying."
+        
+        # Download 10ks into a temp folder
+        base_dir = f"sec-edgar-filings/{ticker}/10-K"
+
+        dl = Downloader(
+            company_name=ticker,
+            email_address="1404268@example.com"
+        )
+        results = dl.get("10-K", ticker, limit=1)
+        
+        # Fetch latest report, i.e. higheest year number
+        downloaded_folders = sorted(os.listdir(base_dir), reverse=True)        
+        latest_path = os.path.join(base_dir, downloaded_folders[0], "full-submission.txt")
+        logger.info(f"Found annual report at {latest_path}")
+        
+        # Fetch text data from report (discard HTML, markup)
+        with open(latest_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Remove HTML tags
+        soup = BeautifulSoup(content, "html.parser")
+        text_only = soup.get_text()        
+
+        # Create and store RAG engine in the service
+        rag_service.add_engine(ticker, documents=[text_only])
+        logger.info(f"Created RAG engine for {ticker} annual report")
+        
+        # Delete folder after use
+        shutil.rmtree(base_dir)
+        
+        return f"Annual report for {ticker} successfully loaded and indexed for querying. The report contains {len(text_only)} characters."
+    except Exception as e:
+        logger.error(f"Error fetching annual report: {str(e)}")
+        return f"Error fetching annual report: {str(e)}"

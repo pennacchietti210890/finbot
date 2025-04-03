@@ -13,7 +13,9 @@ from app.finbot.agents import (
     create_financials_chart_agent,
     create_macroeconomics_agent,
     create_news_search_agent,
+    create_annual_report_agent,
 )
+from app.llm.rag_query_engine import RAGEngine
 from pydantic import BaseModel, Field
 import os
 import logging
@@ -54,9 +56,10 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
     1. If a user asks to plot data about stock price, then first use stock_price to retrieve the data, then use stock_price_chart to plot the data, then FINISH.
     2. If a user asks to plot data about financial metrics or statements, then first use financial_statements_and_metrics to retrieve the data, then use financials_chart to plot the data, then FINISH.
     3. If a user asks to plot data about macroeconomic indicators, then first use macroeconomics to retrieve the data, then use macroeconomics_chart to plot the data, then FINISH.
-    4. ONLY proceed to the next worker if it's truly necessary to complete the user's request.
-    5. If the user's request is about a different stock from what has been asked in the previous request, re-start the workflow with the new stock ticker.
-    6. If no more workers are needed or the request has been addressed, respond with FINISH.
+    4. If a user asks about data from the annual report, then first use annual_report to retrieve the data, then FINISH.
+    5. ONLY proceed to the next worker if it's truly necessary to complete the user's request.
+    6. If the user's request is about a different stock from what has been asked in the previous request, re-start the workflow with the new stock ticker.
+    7. If no more workers are needed or the request has been addressed, respond with FINISH.
     
     Current workers: {workers}
     """
@@ -162,7 +165,7 @@ def stock_price_node(state: State) -> Command[Literal["supervisor"]]:
     stock_data = result["messages"][-2].content  # Already a JSON dict
     last_message = result["messages"][-1].content  # Already a JSON dict
     logger.info("STOCK PRICE NODE - Retrieved stock data and message")
-
+    
     return Command(
         update={
             "messages": [
@@ -336,6 +339,60 @@ def news_search_node(state: State) -> Command[Literal["supervisor"]]:
         update={
             "messages": [
                 HumanMessage(content= result["messages"][-1].content, name="news_search")
+            ],
+        },
+        goto="supervisor",
+    )
+
+def annual_report_node(state: State) -> Command[Literal["supervisor"]]:
+    """
+    Node for handling annual report queries using the RAG engine
+    """
+    logger.info("ANNUAL REPORT NODE - Processing request")
+
+    # Get the RAG engine service
+    from app.finbot.services import RAGEngineService
+    rag_service = RAGEngineService.get_instance()
+    
+    # Get the RAG engine for this ticker
+    rag_engine = rag_service.get_engine(state["stock_ticker"])
+    
+    if not rag_engine:
+        # If the engine doesn't exist, we need to fetch the annual report first
+        logger.info(f"No RAG engine found for {state['stock_ticker']}, need to fetch annual report first")
+        
+        # Create the annual report agent
+        annual_report_agent = create_annual_report_agent(agents_llm)
+        result = annual_report_agent.invoke(state)
+        
+        # Check if the report was successfully fetched
+        rag_engine = rag_service.get_engine(state["stock_ticker"])
+        if not rag_engine:
+            logger.error(f"Failed to create RAG engine for {state['stock_ticker']}")
+            return Command(
+                update={
+                    "messages": [
+                        {"role": "assistant", "content": f"I couldn't fetch the annual report for {state['stock_ticker']}. Please try again or check if the ticker is correct.", "name": "annual_report"}
+                    ],
+                },
+                goto="supervisor",
+            )
+    
+    # Get the query from the last message
+    rag_query = state["messages"][-1].content
+    logger.info(f"Querying RAG engine for {state['stock_ticker']} with: {rag_query}")
+    
+    # Query the RAG engine
+    rag_response = rag_engine.custom_query(rag_query)
+    
+    # Log the response
+    logger.info(f"ANNUAL REPORT NODE - Retrieved RAG Response for {state['stock_ticker']}: {rag_response}")
+    
+    # Return the response
+    return Command(
+        update={
+            "messages": [
+                {"role": "assistant", "content": rag_response.response, "name": "annual_report"}
             ],
         },
         goto="supervisor",

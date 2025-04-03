@@ -3,6 +3,7 @@ from app.finbot.tools import (
     get_historical_prices,
     get_financials,
     get_macroeconomic_series,
+    get_annual_report,
 )
 from langchain_core.language_models.chat_models import BaseChatModel
 from pydantic import BaseModel, Field
@@ -53,9 +54,17 @@ def create_financials_chart_agent(llm: BaseChatModel):
     )
     return financials_chart_agent
 
+
 def create_news_search_agent(llm: BaseChatModel):
     news_search_agent = create_react_agent(
         llm,
         tools=[search_tool],
     )
     return news_search_agent
+
+def create_annual_report_agent(llm: BaseChatModel):
+    annual_report_agent = create_react_agent(
+        llm,
+        tools=[get_annual_report],
+    )
+    return annual_report_agent
