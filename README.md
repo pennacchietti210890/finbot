@@ -18,11 +18,20 @@ finbot/
 │   │   ├── agents.py    # Agent definitions
 │   │   ├── graphs.py    # LangGraph structure
 │   │   ├── nodes.py     # Graph nodes 
-│   │   └── tools.py     # Financial tools
+│   │   ├── services.py  # Singleton services (LLM, RAG engines)
+│   │   ├── tools.py     # Financial tools
+│   │   ├── mcp_agents.py # MCP-compatible agents
+│   │   └── mcp_finbot/   # MCP integration
+│   │       ├── mcp_tools.py        # MCP-compatible tools
+│   │       └── mcp_servers_finbot.py # MCP server configuration
 │   └── llm/             # LLM-related utilities
+│       ├── llm_service.py  # LLM provider management
+│       ├── rag_query_engine.py # RAG implementation for annual reports
+│       └── groq.py      # Groq API integration
 ├── ui/
 │   ├── __init__.py
 │   ├── ui_dash.py       # Dash application with cyberpunk UI
+├── logs/                # Application logs directory
 ├── pyproject.toml       # Poetry configuration and dependencies
 ├── .env.example         # Example environment variables
 └── README.md            # This file
@@ -34,7 +43,7 @@ finbot/
 
 - Python 3.13 or higher
 - [Poetry](https://python-poetry.org/docs/#installation) dependency manager
-- OpenAI API key
+- OpenAI API key (or Groq API key)
 
 ### Installation
 
@@ -49,7 +58,17 @@ finbot/
    cp .env.example .env
    ```
 
-3. Edit the `.env` file to add your OpenAI API key.
+3. Edit the `.env` file to add your API keys:
+   ```
+   # For OpenAI
+   OPENAI_API_KEY=your_openai_api_key
+   
+   # For Groq (optional)
+   GROQ_API_KEY=your_groq_api_key
+   
+   # For MCP tooling (optional)
+   MC_API_KEY=your_mistralcloud_api_key
+   ```
 
 4. Install dependencies using Poetry:
    ```
@@ -75,6 +94,17 @@ poetry run start-frontend
 ```
 
 The Dash app will be available at `http://localhost:8502`.
+
+### Running with MCP (Multi-Cloud Protocol)
+
+To run the application with MCP server support:
+
+```bash
+cd app/finbot
+python mcp_finbot/mcp_servers_finbot.py
+```
+
+This will start the MCP-compatible server for integration with applications that support the Multi-Cloud Protocol.
 
 ## Development with Poetry
 
@@ -111,23 +141,44 @@ FinBot uses LangGraph, a framework for building stateful, multi-agent workflows:
 - **Agentic Workflow**: The backend uses a supervisor-worker pattern with specialized agents for different tasks.
 - **Stock Data Tool**: Integrated tool for fetching historical stock prices from Yahoo Finance.
 - **Chart Generation**: Automatic generation of stock price charts based on query context.
+- **Financial Statements**: Fetch and analyze balance sheets, income statements, and cash flow statements.
 - **Stateful Processing**: Maintains state between nodes, allowing complex multi-step reasoning.
+- **Annual Reports Analysis**: RAG-powered processing of SEC 10-K filings.
 
 The workflow consists of:
 1. A supervisor node that routes the user query to the appropriate worker
-2. A stock price node that retrieves financial data
-3. A chart node that generates visualizations
+2. Specialized worker nodes for different tasks:
+   - Stock price data retrieval
+   - Chart generation
+   - Financial metrics analysis  
+   - Annual report analysis with RAG
+   - News search
+   - Macroeconomic data analysis
 
-## Frontend Features
+## Recent Updates
 
-The modern Dash-based frontend includes:
-- Cyberpunk-inspired user interface with neon green styling
-- Sleek dark mode design with futuristic typography
-- Clickable example questions that display above the chat input
-- Hidden chat container that appears after first interaction
-- Responsive design that works on different screen sizes
-- Integrated Plotly charts with interactive visualizations
-- Custom animations and visual effects for interactive elements
+### MCP Compatibility
+
+FinBot now supports the Multi-Cloud Protocol (MCP), allowing for more flexible deployment and integration:
+
+- **MCP-Compatible Tools**: Financial tools have been adapted to work with the MCP protocol.
+- **MCP Server**: Dedicated server implementation for MCP-based communication.
+- **Cross-Platform Integration**: Enables FinBot tools to be used across different LLM providers and applications that support MCP.
+
+### RAG for Annual Reports
+
+Added Retrieval-Augmented Generation (RAG) capabilities for analyzing company annual reports:
+
+- **SEC 10-K Integration**: Automatically fetches the latest annual reports from the SEC.
+- **RAG Engine Service**: Centralized service that manages indexed reports.
+- **Vector-Based Retrieval**: Efficient searching through lengthy reports.
+- **Contextual Answers**: Provides specific answers to questions about company financials, risks, and strategies.
+
+### Enhanced Data Visualization
+
+- **Multiple Chart Types**: Support for line charts, bar charts, and more.
+- **Financial Chart Formatting**: Specialized formatting for financial metrics.
+- **Markdown Rendering**: Improved text formatting in the chat interface.
 
 ## Example Questions
 
@@ -136,19 +187,23 @@ The modern Dash-based frontend includes:
 - Compare the revenue growth of Microsoft and Google.
 - What is the P/E ratio of Amazon compared to industry average?
 - Show me the dividend yield for Coca-Cola
-- What sectors are performing best in the current market?
+- What risks does Apple mention in their latest annual report?
+- What macroeconomic factors affected tech stocks in the last year?
 
 ## Features
 
 - Natural language processing for financial queries
 - Integration with financial data sources via LangGraph
 - Dynamic chart generation for data visualization
+- RAG-powered analysis of annual reports
 - Conversational UI with persistent chat history
 - Modern, cyberpunk-styled interface
-- Seamless integration between Python backend and frontend
+- Session management for multi-user support
+- MCP compatibility for cross-platform integration
 
 ## Limitations
 
 - Currently only supports companies in the S&P 500 index
 - Data may not be real-time and should not be used for investment decisions
-- Limited to financial information that is publicly available 
+- Limited to financial information that is publicly available
+- RAG processing of annual reports may not capture all nuances or details 
