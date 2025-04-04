@@ -17,8 +17,6 @@ from dotenv import load_dotenv
 import os
 
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 load_dotenv()

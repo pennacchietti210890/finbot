@@ -49,6 +49,7 @@ root_logger.addHandler(console_handler)
 
 # Get a logger for this module
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 logger.info("Logger initialized - This message should appear in the log file")
 logger.info(f"Logging to file: {log_file}")
 
@@ -148,7 +149,7 @@ async def chat(request: ChatRequest):
             logger.info(f"Using existing config for session ID: {session_config}")
 
         # Process the user query through the LangGraph
-        response = finbot_graph.invoke(
+        response = await finbot_graph.ainvoke(
             {"messages":[{"role": "user", "content": request.query}]},
             config=session_config,
         )
