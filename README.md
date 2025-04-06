@@ -65,9 +65,6 @@ finbot/
    
    # For Groq (optional)
    GROQ_API_KEY=your_groq_api_key
-   
-   # For MCP tooling (optional)
-   MC_API_KEY=your_mistralcloud_api_key
    ```
 
 4. Install dependencies using Poetry:
@@ -95,17 +92,6 @@ poetry run start-frontend
 
 The Dash app will be available at `http://localhost:8502`.
 
-### Running with MCP (Multi-Cloud Protocol)
-
-To run the application with MCP server support:
-
-```bash
-cd app/finbot
-python mcp_finbot/mcp_servers_finbot.py
-```
-
-This will start the MCP-compatible server for integration with applications that support the Multi-Cloud Protocol.
-
 ## Development with Poetry
 
 To enter the Poetry virtual environment for development:
@@ -129,7 +115,7 @@ poetry add --group dev package-name
 ## Usage
 
 1. Open the app in your browser at `http://localhost:8502`.
-2. You'll see a cyberpunk-styled interface with example questions displayed.
+2. You'll see an interface with example questions displayed.
 3. Click on any example question or type your own query about a publicly listed company.
 4. The chat interface will appear with the AI-generated response and any relevant charts.
 5. Continue your conversation with follow-up questions.
@@ -159,7 +145,7 @@ The workflow consists of:
 
 ### MCP Compatibility
 
-FinBot now supports the Multi-Cloud Protocol (MCP), allowing for more flexible deployment and integration:
+FinBot now supports the Model Context Protocol (MCP) (with a similar implementation to the official MCP Python SDK), allowing for more flexible deployment and integration:
 
 - **MCP-Compatible Tools**: Financial tools have been adapted to work with the MCP protocol.
 - **MCP Server**: Dedicated server implementation for MCP-based communication.
@@ -197,13 +183,9 @@ Added Retrieval-Augmented Generation (RAG) capabilities for analyzing company an
 - Dynamic chart generation for data visualization
 - RAG-powered analysis of annual reports
 - Conversational UI with persistent chat history
-- Modern, cyberpunk-styled interface
-- Session management for multi-user support
-- MCP compatibility for cross-platform integration
 
 ## Limitations
 
-- Currently only supports companies in the S&P 500 index
 - Data may not be real-time and should not be used for investment decisions
 - Limited to financial information that is publicly available
 - RAG processing of annual reports may not capture all nuances or details 
