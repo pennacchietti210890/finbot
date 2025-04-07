@@ -1,19 +1,21 @@
+import json
+import logging
+import os
+import sys
+import uuid
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
+
+import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel
-from typing import Dict, Any, List, Optional, Union
+
 from app.finbot.graphs import create_graph
-import logging
-import uvicorn
-import os
-import uuid
-import json
-import sys
-from datetime import datetime
-from dotenv import load_dotenv
-from app.llm.llm_service import LLMService
 from app.finbot.nodes import State
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from app.llm.llm_service import LLMService
 
 # Configure detailed logging
 # Make sure we're using absolute paths for log files

@@ -5,7 +5,6 @@ from typing import Dict, List, Optional
 
 import requests
 from dotenv import load_dotenv
-
 from langchain_groq import ChatGroq
 
 logger = logging.getLogger(__name__)

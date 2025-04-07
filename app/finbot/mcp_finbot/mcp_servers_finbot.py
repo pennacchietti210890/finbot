@@ -1,21 +1,18 @@
 import asyncio
 import json
+import logging
 import os
 import sys
-from typing import Dict
 import traceback
-
-from app.finbot.mcp_finbot.mcp_tools import (
-    get_historical_prices,
-    get_financials,
-    get_macroeconomic_series,
-    search_news,
-    get_annual_report,
-)
+from typing import Dict
 
 import requests
 from dotenv import load_dotenv
-import logging
+
+from app.finbot.mcp_finbot.mcp_tools import (get_annual_report, get_financials,
+                                             get_historical_prices,
+                                             get_macroeconomic_series,
+                                             search_news)
 
 # Configure logging
 logger = logging.getLogger(__name__)

@@ -1,6 +1,7 @@
 """Service classes for the FinBot application."""
-from typing import Dict, Any, Optional
 import logging
+from typing import Any, Dict, Optional
+
 from app.llm.rag_query_engine import RAGEngine
 
 logger = logging.getLogger(__name__)

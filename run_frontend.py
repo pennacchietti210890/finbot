@@ -1,6 +1,6 @@
 # run_gunicorn.py
-import sys
 import subprocess
+import sys
 
 
 def main():

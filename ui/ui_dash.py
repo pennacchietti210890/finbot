@@ -1,13 +1,14 @@
-import dash
-from dash import dcc, html, Input, Output, State, callback, ctx
-import plotly.graph_objects as go
 import json
-import requests
-import random
-import os
-import math
 import logging
-from typing import Dict, Any, List
+import math
+import os
+import random
+from typing import Any, Dict, List
+
+import dash
+import plotly.graph_objects as go
+import requests
+from dash import Input, Output, State, callback, ctx, dcc, html
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
