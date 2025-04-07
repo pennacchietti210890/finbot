@@ -26,11 +26,26 @@ env_path = os.path.join(
 load_dotenv(env_path)
 
 
-def debug_log(msg):
+def debug_log(msg: str) -> None:
+    """
+    Print debug information to stderr with MCP prefix for visibility.
+    
+    Args:
+        msg: The message to log
+    """
     logger.info(f"[MCP-DEBUG] {msg}", file=sys.stderr, flush=True)
 
 
-async def handle_request(request: dict):
+async def handle_request(request: dict) -> dict:
+    """
+    Process incoming MCP protocol requests and return appropriate responses.
+    
+    Args:
+        request: A dictionary containing the JSON-RPC request
+        
+    Returns:
+        A dictionary containing the JSON-RPC response
+    """
     debug_log(f"📦 Handling request: {request}")
     method = request.get("method")
     id_ = request.get("id")
@@ -265,7 +280,11 @@ async def handle_request(request: dict):
     return {"id": id_, "error": {"message": "Unknown method"}}
 
 
-async def run_server():
+async def run_server() -> None:
+    """
+    Run the MCP server, reading JSON-RPC requests from stdin and writing responses to stdout.
+    The server runs in an infinite loop until stdin is closed.
+    """
     debug_log("🟢 MCP Server started and waiting for input...")
 
     while True:
