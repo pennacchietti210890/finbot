@@ -38,6 +38,7 @@ import json
 import asyncio
 from bs4 import BeautifulSoup
 import shutil
+
 # Get the logger for this module
 logger = logging.getLogger(__name__)
 
@@ -61,16 +62,14 @@ async def send_mcp_message(proc, message: dict):
     line = await proc.stdout.readline()
     return json.loads(line)
 
+
 # Tool calling function
 async def call_tool(proc, tool_name: str, arguments: dict) -> str:
     msg = {
         "jsonrpc": "2.0",
         "id": 42,  # could randomize or increment
         "method": "tools/call",
-        "params": {
-            "tool_name": tool_name,
-            "arguments": arguments
-        }
+        "params": {"tool_name": tool_name, "arguments": arguments},
     }
     response = await send_mcp_message(proc, msg)
     logger.info("🧪 MCP raw response:", response)
@@ -78,6 +77,7 @@ async def call_tool(proc, tool_name: str, arguments: dict) -> str:
     if "result" not in response:
         raise ValueError(f"❌ MCP tool call failed, response: {response}")
     return response["result"]["output"]
+
 
 # Wrap raw MCP tool schema into LangChain @tool
 class MCPTool(BaseTool):
@@ -118,6 +118,7 @@ class MCPTool(BaseTool):
     def _run(self, tool_input: dict, **kwargs):
         raise NotImplementedError("Only async supported")
 
+
 def wrap_tool_for_langchain(tool_schema, proc):
     tool_name = tool_schema["name"]
     description = tool_schema.get("description", "")
@@ -130,13 +131,10 @@ def wrap_tool_for_langchain(tool_schema, proc):
         input_schema=tool_schema["inputSchema"],  # from MCP tools/list
     )
 
+
 # ✅ Main helper: load LangChain tools from MCP server
 async def load_tools_from_mcp_server(proc):
-    msg = {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "tools/list"
-    }
+    msg = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
     response = await send_mcp_message(proc, msg)
     raw_tools = response["result"]["tools"]
     wrapped = []
@@ -275,9 +273,10 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
 
 async def stock_price_node(state: State) -> Command[Literal["supervisor"]]:
     logger.info("STOCK PRICE NODE - Processing request")
-    
+
     proc = await asyncio.create_subprocess_exec(
-        "python", "app/finbot/mcp_finbot/mcp_servers_finbot.py",
+        "python",
+        "app/finbot/mcp_finbot/mcp_servers_finbot.py",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -285,7 +284,7 @@ async def stock_price_node(state: State) -> Command[Literal["supervisor"]]:
 
     wrapped_tools = await load_tools_from_mcp_server(proc)
     tool_map = {tool.name: tool for tool in wrapped_tools}
-    
+
     stock_price_agent = create_mcp_stock_price_agent(agents_llm, tool_map)
     result = await stock_price_agent.ainvoke(state)
 
@@ -294,7 +293,7 @@ async def stock_price_node(state: State) -> Command[Literal["supervisor"]]:
     last_message = result["messages"][-1].content  # Already a JSON dict
     logger.info("STOCK PRICE NODE - Retrieved stock data and message")
     logger.info(f"{stock_data}")
-    
+
     return Command(
         update={
             "messages": [
@@ -345,7 +344,8 @@ async def financials_node(state: State) -> Command[Literal["supervisor"]]:
     logger.info("FINANCIALS NODE - Processing request")
 
     proc = await asyncio.create_subprocess_exec(
-        "python", "app/finbot/mcp_finbot/mcp_servers_finbot.py",
+        "python",
+        "app/finbot/mcp_finbot/mcp_servers_finbot.py",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -353,7 +353,7 @@ async def financials_node(state: State) -> Command[Literal["supervisor"]]:
 
     wrapped_tools = await load_tools_from_mcp_server(proc)
     tool_map = {tool.name: tool for tool in wrapped_tools}
-    
+
     financials_agent = create_mcp_financials_agent(agents_llm, tool_map)
     result = await financials_agent.ainvoke(state)
 
@@ -379,7 +379,9 @@ def financials_chart_node(state: State) -> Command[Literal["supervisor"]]:
 
     last_message = financials_chart_response["messages"][-1].content
     financials_chart_data = financials_chart_response.get("structured_response", None)
-    logger.info(f"FINANCIALS CHART NODE - Retrieved financials chart data: {financials_chart_data}")
+    logger.info(
+        f"FINANCIALS CHART NODE - Retrieved financials chart data: {financials_chart_data}"
+    )
 
     if not financials_chart_data:
         logger.warning(
@@ -418,7 +420,8 @@ async def macroeconomics_node(state: State) -> Command[Literal["supervisor"]]:
     logger.info("MACROECONOMICS NODE - Processing request")
 
     proc = await asyncio.create_subprocess_exec(
-        "python", "app/finbot/mcp_finbot/mcp_servers_finbot.py",
+        "python",
+        "app/finbot/mcp_finbot/mcp_servers_finbot.py",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -426,7 +429,7 @@ async def macroeconomics_node(state: State) -> Command[Literal["supervisor"]]:
 
     wrapped_tools = await load_tools_from_mcp_server(proc)
     tool_map = {tool.name: tool for tool in wrapped_tools}
-    
+
     macroeconomics_agent = create_mcp_macroeconomics_agent(agents_llm, tool_map)
     result = await macroeconomics_agent.ainvoke(state)
 
@@ -483,9 +486,10 @@ def macroeconomics_chart_node(state: State) -> Command[Literal["supervisor"]]:
 
 async def news_search_node(state: State) -> Command[Literal["supervisor"]]:
     logger.info("NEWS SEARCH NODE - Processing request")
-    
+
     proc = await asyncio.create_subprocess_exec(
-        "python", "app/finbot/mcp_finbot/mcp_servers_finbot.py",
+        "python",
+        "app/finbot/mcp_finbot/mcp_servers_finbot.py",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -493,14 +497,14 @@ async def news_search_node(state: State) -> Command[Literal["supervisor"]]:
 
     wrapped_tools = await load_tools_from_mcp_server(proc)
     tool_map = {tool.name: tool for tool in wrapped_tools}
-    
+
     news_search_agent = create_mcp_news_search_agent(agents_llm, tool_map)
     result = await news_search_agent.ainvoke(state)
 
     return Command(
         update={
             "messages": [
-                HumanMessage(content= result["messages"][-1].content, name="news_search")
+                HumanMessage(content=result["messages"][-1].content, name="news_search")
             ],
         },
         goto="supervisor",
@@ -515,17 +519,21 @@ async def annual_report_node(state: State) -> Command[Literal["supervisor"]]:
 
     # Get the RAG engine service
     from app.finbot.services import RAGEngineService
+
     rag_service = RAGEngineService.get_instance()
-    
+
     # Get the RAG engine for this ticker
     rag_engine = rag_service.get_engine(state["stock_ticker"])
-    
+
     if not rag_engine:
         # If the engine doesn't exist, we need to fetch the annual report first
-        logger.info(f"No RAG engine found for {state['stock_ticker']}, need to fetch annual report first")
-        
+        logger.info(
+            f"No RAG engine found for {state['stock_ticker']}, need to fetch annual report first"
+        )
+
         proc = await asyncio.create_subprocess_exec(
-            "python", "app/finbot/mcp_finbot/mcp_servers_finbot.py",
+            "python",
+            "app/finbot/mcp_finbot/mcp_servers_finbot.py",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -533,22 +541,22 @@ async def annual_report_node(state: State) -> Command[Literal["supervisor"]]:
 
         wrapped_tools = await load_tools_from_mcp_server(proc)
         tool_map = {tool.name: tool for tool in wrapped_tools}
-        
+
         annual_report_agent = create_mcp_annual_report_agent(agents_llm, tool_map)
         result = await annual_report_agent.ainvoke(state)
         latest_path = result["messages"][-2].content
-        
+
         # Check if the report was successfully fetched
         with open(latest_path, "r", encoding="utf-8") as f:
             content = f.read()
-        
+
         if os.path.isdir(latest_path):
             shutil.rmtree(latest_path)
         else:
             logger.warning(f"❗ Skipping delete, not a directory: {latest_path}")
         # Remove HTML tags
         soup = BeautifulSoup(content, "html.parser")
-        text_only = soup.get_text()        
+        text_only = soup.get_text()
         # Create and store RAG engine in the service
         rag_service.add_engine(state["stock_ticker"], documents=[text_only])
 
@@ -559,27 +567,37 @@ async def annual_report_node(state: State) -> Command[Literal["supervisor"]]:
             return Command(
                 update={
                     "messages": [
-                        {"role": "assistant", "content": f"I couldn't fetch the annual report for {state['stock_ticker']}. Please try again or check if the ticker is correct.", "name": "annual_report"}
+                        {
+                            "role": "assistant",
+                            "content": f"I couldn't fetch the annual report for {state['stock_ticker']}. Please try again or check if the ticker is correct.",
+                            "name": "annual_report",
+                        }
                     ],
                 },
                 goto="supervisor",
             )
-    
+
     # Get the query from the last message
     rag_query = state["messages"][-1].content
     logger.info(f"Querying RAG engine for {state['stock_ticker']} with: {rag_query}")
-    
+
     # Query the RAG engine
     rag_response = rag_engine.custom_query(rag_query)
-    
+
     # Log the response
-    logger.info(f"ANNUAL REPORT NODE - Retrieved RAG Response for {state['stock_ticker']}: {rag_response}")
-    
+    logger.info(
+        f"ANNUAL REPORT NODE - Retrieved RAG Response for {state['stock_ticker']}: {rag_response}"
+    )
+
     # Return the response
     return Command(
         update={
             "messages": [
-                {"role": "assistant", "content": rag_response.response, "name": "annual_report"}
+                {
+                    "role": "assistant",
+                    "content": rag_response.response,
+                    "name": "annual_report",
+                }
             ],
         },
         goto="supervisor",

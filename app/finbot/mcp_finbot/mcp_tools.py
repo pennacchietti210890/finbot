@@ -59,8 +59,6 @@ def get_historical_prices(ticker: str, day: int = 365) -> str:
         return json.dumps({"error": str(e)})
 
 
-
-
 class KeyMetrics(TypedDict):
     market_cap: float
     pe_ratio: float
@@ -70,7 +68,6 @@ class KeyMetrics(TypedDict):
     profit_margin: float
     debt_to_equity: float
     current_ratio: float
-
 
 
 def get_financials(ticker: str) -> str:
@@ -125,9 +122,9 @@ def get_financials(ticker: str) -> str:
         return json.dumps({"error": str(e)})
 
 
-
 def get_macroeconomic_series(
-    macro_indicator: str, start_year: str, end_year: str) -> str:
+    macro_indicator: str, start_year: str, end_year: str
+) -> str:
     """
     Fetches the a time series for the chosen macro economic indicator from FRED API.
 
@@ -184,10 +181,10 @@ def get_macroeconomic_series(
         return json.dumps({"error": str(e)})
 
 
-
 def search_news(query: str) -> str:
     """
     Fetches news articles for a given user query using the Tavily API.
+    The argument query should be the full string containing the user's query.
     Returns a JSON string containing a list of articles with:
     - "title": Article title
     - "url": Link to the article
@@ -197,9 +194,9 @@ def search_news(query: str) -> str:
             "https://api.tavily.com/search",
             headers={
                 "Authorization": f"Bearer {os.getenv('TAVILY_API_KEY')}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             },
-            json={"query": query, "num_results": 3}
+            json={"query": query, "num_results": 3},
         )
         res.raise_for_status()
         articles = res.json().get("results", [])
@@ -215,19 +212,18 @@ def get_annual_report(ticker: str) -> str:
 
     **Only choose this tool if the user asks questions about a company's or stock annual report (also known as 10k).**
     """
-    try:        
+    try:
         # Download 10ks into a temp folder
         base_dir = f"sec-edgar-filings/{ticker}/10-K"
-        
-        dl = Downloader(
-            company_name=ticker,
-            email_address="1404268@example.com"
-        )
+
+        dl = Downloader(company_name=ticker, email_address="1404268@example.com")
         results = dl.get("10-K", ticker, limit=1)
-        
+
         # Fetch latest report, i.e. higheest year number
-        downloaded_folders = sorted(os.listdir(base_dir), reverse=True)        
-        latest_path = os.path.abspath(os.path.join(base_dir, downloaded_folders[0], "full-submission.txt"))
+        downloaded_folders = sorted(os.listdir(base_dir), reverse=True)
+        latest_path = os.path.abspath(
+            os.path.join(base_dir, downloaded_folders[0], "full-submission.txt")
+        )
 
         # Fetch text data from report (discard HTML, markup)
         with open(latest_path, "r", encoding="utf-8") as f:
@@ -235,8 +231,41 @@ def get_annual_report(ticker: str) -> str:
 
         # Remove HTML tags
         soup = BeautifulSoup(content, "html.parser")
-        text_only = soup.get_text()        
-        
+        text_only = soup.get_text()
+
+        return latest_path
+    except Exception as e:
+        logger.error(f"Error fetching annual report: {str(e)}")
+        return f"Error fetching annual report: {str(e)}"
+
+
+def get_earnings_call_transcript(ticker: str) -> str:
+    """
+    Fetches the latest annual report for one stock, given the stock ticker, and return a string containing the text content of the report
+
+    **Only choose this tool if the user asks questions about a company's or stock annual report (also known as 10k).**
+    """
+    try:
+        # Download 10ks into a temp folder
+        base_dir = f"sec-edgar-filings/{ticker}/10-K"
+
+        dl = Downloader(company_name=ticker, email_address="1404268@example.com")
+        results = dl.get("10-K", ticker, limit=1)
+
+        # Fetch latest report, i.e. higheest year number
+        downloaded_folders = sorted(os.listdir(base_dir), reverse=True)
+        latest_path = os.path.abspath(
+            os.path.join(base_dir, downloaded_folders[0], "full-submission.txt")
+        )
+
+        # Fetch text data from report (discard HTML, markup)
+        with open(latest_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Remove HTML tags
+        soup = BeautifulSoup(content, "html.parser")
+        text_only = soup.get_text()
+
         return latest_path
     except Exception as e:
         logger.error(f"Error fetching annual report: {str(e)}")

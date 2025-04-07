@@ -22,34 +22,14 @@ log_dir = os.path.join(base_dir, "logs")
 os.makedirs(log_dir, exist_ok=True)
 log_file = os.path.join(log_dir, f"finbot_{datetime.now().strftime('%Y%m%d')}.log")
 
-# Create a file handler for the log file
-file_handler = logging.FileHandler(log_file)
-file_handler.setLevel(logging.DEBUG)
-
-# Create a console handler
-console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setLevel(logging.INFO)
-
-# Create a formatter and add it to the handlers
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-file_handler.setFormatter(formatter)
-console_handler.setFormatter(formatter)
-
-# Configure the root logger
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.DEBUG)
-
-# Remove any existing handlers to avoid duplicates
-if root_logger.handlers:
-    for handler in root_logger.handlers:
-        root_logger.removeHandler(handler)
-
-root_logger.addHandler(file_handler)
-root_logger.addHandler(console_handler)
-
-# Get a logger for this module
+# root logger config
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+
 logger.info("Logger initialized - This message should appear in the log file")
 logger.info(f"Logging to file: {log_file}")
 
@@ -125,20 +105,20 @@ async def chat(request: ChatRequest):
     """
     # Process the user query through the LangGraph
     logger.info(f"Processing query: {request.query}")
-    
+
     try:
         # Get or create session ID
         session_id = request.session_id
-        if not session_id:  
+        if not session_id:
             session_id = str(uuid.uuid4())
             logger.info(f"Created new session ID: {session_id}")
             logger.info(f"Creating graph...")
             finbot_graph = create_graph(
-                    LLMService(
-                        llm_provider="openai",
-                        model_name="gpt-4o-mini",
-                        api_key=os.getenv("OPENAI_API_KEY"),
-                    ).client
+                LLMService(
+                    llm_provider="openai",
+                    model_name="gpt-4o-mini",
+                    api_key=os.getenv("OPENAI_API_KEY"),
+                ).client
             )
             logger.info(f"Creating new graph Config for new session ID: {session_id}")
             session_config = {"configurable": {"thread_id": f"{session_id}"}}
@@ -150,7 +130,7 @@ async def chat(request: ChatRequest):
 
         # Process the user query through the LangGraph
         response = await finbot_graph.ainvoke(
-            {"messages":[{"role": "user", "content": request.query}]},
+            {"messages": [{"role": "user", "content": request.query}]},
             config=session_config,
         )
 
@@ -209,7 +189,6 @@ async def chat(request: ChatRequest):
         if response.get("messages") and len(response["messages"]) > 0:
             logger.info(response.get("stock_ticker", "{}"))
             response_text = response["messages"][-1].content
-
 
         # Extract chart data from stock_data
         if response["messages"][-1].name == "stock_price_chart":

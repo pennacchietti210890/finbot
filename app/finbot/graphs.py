@@ -13,6 +13,7 @@ from app.finbot.nodes import (
 from langgraph.graph import StateGraph, START
 from langgraph.checkpoint.memory import MemorySaver
 
+
 def create_graph(llm):
     stock_supervisor_node = make_supervisor_node(
         llm,

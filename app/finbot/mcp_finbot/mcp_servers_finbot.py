@@ -5,7 +5,13 @@ import sys
 from typing import Dict
 import traceback
 
-from app.finbot.mcp_finbot.mcp_tools import get_historical_prices, get_financials, get_macroeconomic_series, search_news, get_annual_report
+from app.finbot.mcp_finbot.mcp_tools import (
+    get_historical_prices,
+    get_financials,
+    get_macroeconomic_series,
+    search_news,
+    get_annual_report,
+)
 
 import requests
 from dotenv import load_dotenv
@@ -21,7 +27,8 @@ load_dotenv(env_path)
 
 
 def debug_log(msg):
-    print(f"[MCP-DEBUG] {msg}", file=sys.stderr, flush=True)
+    logger.info(f"[MCP-DEBUG] {msg}", file=sys.stderr, flush=True)
+
 
 async def handle_request(request: dict):
     debug_log(f"📦 Handling request: {request}")
@@ -34,29 +41,24 @@ async def handle_request(request: dict):
             "id": id_,
             "result": {
                 "protocolVersion": "2024-11-05",  # ✅ REQUIRED
-                "serverInfo": {
-                    "name": "finbot-mcp",
-                    "version": "0.1.0"
-                },
-                "capabilities": {
-                    "listChanged": True
-                }
-            }
+                "serverInfo": {"name": "finbot-mcp", "version": "0.1.0"},
+                "capabilities": {"listChanged": True},
+            },
         }
-   # Optional notification (no response required — but some clients expect it)
+    # Optional notification (no response required — but some clients expect it)
     elif method == "notifications/initialized":
         return {"id": None, "result": {}}
 
     elif method == "tools/list":
         debug_log("🔍 Handling tools/list")
-        return  {
+        return {
             "jsonrpc": "2.0",
             "id": id_,
             "result": {
-            "tools": [
-                   {
-                       "name": "get_historical_prices",
-                       "description": """
+                "tools": [
+                    {
+                        "name": "get_historical_prices",
+                        "description": """
                            Fetches historical stock prices given a stock ticker and a number of days. Returns a JSON string containing:
                    - "dates": List of date strings (YYYY-MM-DD)
                    - "prices": Corresponding stock closing prices
@@ -64,24 +66,24 @@ async def handle_request(request: dict):
                    Example output:
                    {"dates": ["2025-02-06", "2025-02-07"], "prices": [414.9879150390625, 408.9300537109375]}
                """,
-               "inputSchema": {
-                   "type": "object",
-                   "properties": {
-                       "ticker": {
-                           "type": "string",
-                           "description": "Stock ticker symbol (e.g., AAPL, TSLA)."
-                       },
-                       "day": {
-                           "type": "string",
-                           "description": "Number of days to fetch historical prices for."
-                       }
-                   },
-                   "required": ["ticker", "day"]
-               }
-           },
-           {
-               "name": "get_financials",
-               "description": """
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "ticker": {
+                                    "type": "string",
+                                    "description": "Stock ticker symbol (e.g., AAPL, TSLA).",
+                                },
+                                "day": {
+                                    "type": "string",
+                                    "description": "Number of days to fetch historical prices for.",
+                                },
+                            },
+                            "required": ["ticker", "day"],
+                        },
+                    },
+                    {
+                        "name": "get_financials",
+                        "description": """
                    Fetches the current and historical financial statements for one single stock, given the stock ticker, and returns a JSON string containing:
                        - "balance sheet": A Table containing information on the Balance Sheet
                        - "income statement": A Table containing information on the Income Statement
@@ -91,20 +93,20 @@ async def handle_request(request: dict):
 
                        **Only choose this tool if the user asks for financial statements or ratios.**
                """,
-               "inputSchema": {
-                   "type": "object",
-                   "properties": {
-                       "ticker": {
-                           "type": "string",
-                           "description": "The stock ticker symbol (e.g., AAPL, TSLA)."
-                       }
-                   },
-                   "required": ["ticker"]
-               }
-           },
-           {
-               "name": "get_macroeconomic_series",
-               "description": """
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "ticker": {
+                                    "type": "string",
+                                    "description": "The stock ticker symbol (e.g., AAPL, TSLA).",
+                                }
+                            },
+                            "required": ["ticker"],
+                        },
+                    },
+                    {
+                        "name": "get_macroeconomic_series",
+                        "description": """
                    Fetches the a time series for the chosen macro economic indicator from FRED API.
                            Args:
                            macro_indicator: The MacroEconomic data series to fetch from FRED API
@@ -146,73 +148,73 @@ async def handle_request(request: dict):
                            Output:
                                Dictionary object of Dates:Values for the desired data series
                """,
-               "inputSchema": {
-                   "type": "object",
-                   "properties": {
-                       "macro_indicator": {
-                           "type": "string",
-                           "description": "The FRED macro indicator series ID (e.g., GDPC1 for Real Gross Domestic Product)."
-                       },
-                       "start_year": {
-                           "type": "int",
-                           "description": "Start year for the data series, in format YYYY."
-                       },
-                       "end_year": {
-                           "type": "int",
-                           "description": "End year for the data series, in format YYYY."
-                       }
-                   },
-                   "required": ["macro_indicator", "start_year", "end_year"]
-               }
-           },
-           {
-               "name": "search_news",
-               "description": "Search for recent news articles using the Tavily API.",
-               "inputSchema": {
-                   "type": "object",
-                   "properties": {
-                       "query": {
-                           "type": "string",
-                           "description": "The search query (e.g., inflation, AI, interest rates)."
-                       }
-                   },
-                   "required": ["query"]
-               }
-           },
-           {
-               "name": "get_annual_report",
-               "description": """
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "macro_indicator": {
+                                    "type": "string",
+                                    "description": "The FRED macro indicator series ID (e.g., GDPC1 for Real Gross Domestic Product).",
+                                },
+                                "start_year": {
+                                    "type": "int",
+                                    "description": "Start year for the data series, in format YYYY.",
+                                },
+                                "end_year": {
+                                    "type": "int",
+                                    "description": "End year for the data series, in format YYYY.",
+                                },
+                            },
+                            "required": ["macro_indicator", "start_year", "end_year"],
+                        },
+                    },
+                    {
+                        "name": "search_news",
+                        "description": """Searches for recent news articles using Tavily based on a full user query. \
+                                Use this tool whenever the user asks about current events, headlines, or what's happening. \
+                                Pass the user's entire question or phrase as the `query` argument.
+                """,
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "query": {
+                                    "type": "string",
+                                    "description": "The search query (e.g., tell me some news about AAPL).",
+                                }
+                            },
+                            "required": ["query"],
+                        },
+                    },
+                    {
+                        "name": "get_annual_report",
+                        "description": """
                 Fetches the latest annual report for one stock, given the stock ticker, and return a string containing the text content of the report.
                 **Only choose this tool if the user asks questions about a company's or stock annual report (also known as 10k).**
                """,
-               "inputSchema": {
-                   "type": "object",
-                   "properties": {
-                       "ticker": {
-                           "type": "string",
-                           "description": "The stock ticker symbol (e.g., AAPL, TSLA)."
-                       }
-                   },
-                   "required": ["ticker"]
-               }
-           }
-            ]
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "ticker": {
+                                    "type": "string",
+                                    "description": "The stock ticker symbol (e.g., AAPL, TSLA).",
+                                }
+                            },
+                            "required": ["ticker"],
+                        },
+                    },
+                ]
+            },
         }
-    }
-        
 
     elif method == "tools/call":
         params = request.get("params", {})
         tool_name = params.get("tool_name")
         arguments = params.get("arguments", {})
         try:
-            
             if tool_name == "echo":
                 output_data = arguments["message"]
                 return {"jsonrpc": "2.0", "id": id_, "result": {"output": output_data}}
-            
+
             elif tool_name == "get_historical_prices":
-                print(arguments)
                 ticker = arguments["ticker"]
                 day = int(arguments["day"])
                 output_data = get_historical_prices(ticker, day)
@@ -231,6 +233,7 @@ async def handle_request(request: dict):
                 return {"jsonrpc": "2.0", "id": id_, "result": {"output": output_data}}
 
             elif tool_name == "search_news":
+                logger.info(arguments)
                 query = arguments.get("query")
                 output_data = search_news(query)
                 return {"jsonrpc": "2.0", "id": id_, "result": {"output": output_data}}
@@ -242,16 +245,21 @@ async def handle_request(request: dict):
 
             else:
                 debug_log(f"⚠️ Unknown method: {method}")
-                return {"jsonrpc": "2.0", "id": id_, "error": {"message": f"Unknown tool: {tool_name}"}}
+                return {
+                    "jsonrpc": "2.0",
+                    "id": id_,
+                    "error": {"message": f"Unknown tool: {tool_name}"},
+                }
 
         except Exception as e:
             import traceback
+
             err = {
                 "jsonrpc": "2.0",
                 "error": {
                     "message": f"Server error: {str(e)}",
-                    "trace": traceback.format_exc()
-                }
+                    "trace": traceback.format_exc(),
+                },
             }
             return err
     return {"id": id_, "error": {"message": "Unknown method"}}

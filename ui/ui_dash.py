@@ -33,6 +33,8 @@ app = dash.Dash(
     meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
 )
 
+server = app.server
+
 # Define the app's layout
 app.layout = html.Div(
     [
@@ -593,7 +595,7 @@ def call_backend(query: str, session_id: str = "") -> Dict[str, Any]:
         logger.error(f"Connection error when contacting backend at {API_URL}")
         return {
             "text": "**Error:** Sorry, I couldn't connect to the backend server. Please check that the API is running.\n\n"
-                   "Make sure the backend is running with `cd app && python -m main`.",
+            "Make sure the backend is running with `cd app && python -m main`.",
             "charts_data": "{}",
             "session_id": session_id,
         }
@@ -601,7 +603,7 @@ def call_backend(query: str, session_id: str = "") -> Dict[str, Any]:
         logger.error(f"Request error when calling backend: {str(e)}")
         return {
             "text": f"**Error:** Sorry, I couldn't process your request due to a server error:\n\n"
-                   f"`{str(e)}`",
+            f"`{str(e)}`",
             "charts_data": "{}",
             "session_id": session_id,
         }
@@ -609,7 +611,7 @@ def call_backend(query: str, session_id: str = "") -> Dict[str, Any]:
         logger.error(f"Unexpected error when calling backend: {str(e)}")
         return {
             "text": f"**Error:** Sorry, an unexpected error occurred while processing your request.\n\n"
-                   f"Error details: `{str(e)}`",
+            f"Error details: `{str(e)}`",
             "charts_data": "{}",
             "session_id": session_id,
         }
@@ -847,8 +849,8 @@ def update_chat(
                 "color": "#7fffcf",
                 "textAlign": "right",
                 "wordBreak": "break-word",
-                "whiteSpace": "normal"
-            }
+                "whiteSpace": "normal",
+            },
         ),
         className="message user-message",
     )
@@ -892,8 +894,8 @@ def update_chat(
                 style={
                     "color": "white",
                     "wordBreak": "break-word",
-                    "whiteSpace": "normal"
-                }
+                    "whiteSpace": "normal",
+                },
             ),
             # Add charts container if there are charts
             html.Div(

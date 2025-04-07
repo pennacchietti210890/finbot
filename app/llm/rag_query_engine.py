@@ -21,8 +21,13 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-def create_index(documents: List[str], model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
-    embedding_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+def create_index(
+    documents: List[str], model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+):
+    embedding_model = HuggingFaceEmbedding(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
     documents = [Document(text=doc) for doc in documents]
     index = VectorStoreIndex.from_documents(documents, embed_model=embedding_model)
     return index
@@ -55,7 +60,6 @@ class RAGEngine:
             similarity_top_k=5,
         )
         self.response_synthesizer = TreeSummarize(llm=self.client)
-
 
     def custom_query(self, query: str) -> List[str]:
         """
