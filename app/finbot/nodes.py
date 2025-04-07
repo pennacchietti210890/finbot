@@ -11,23 +11,10 @@ from langchain_core.utils.function_calling import convert_to_openai_function
 
 from langchain_openai import ChatOpenAI
 
-from typing import TypedDict, Annotated, Literal, Any, Dict
+from typing import TypedDict, Annotated, Literal, Any, Dict, List
 from app.llm.llm_service import LLMService
-from app.finbot.agents import (
-    create_stock_price_agent,
-    create_financials_agent,
-    create_financials_chart_agent,
-    create_macroeconomics_agent,
-    create_news_search_agent,
-    create_annual_report_agent,
-)
 from app.finbot.mcp_agents import (
-    create_mcp_stock_price_agent,
-    create_mcp_financials_agent,
-    create_mcp_financials_chart_agent,
-    create_mcp_macroeconomics_agent,
-    create_mcp_news_search_agent,
-    create_mcp_annual_report_agent,
+    ReActAgent,
 )
 from app.llm.rag_query_engine import RAGEngine
 from pydantic import BaseModel, Field, create_model
@@ -149,6 +136,17 @@ async def load_tools_from_mcp_server(proc):
             logger.info(f"❌ Failed to wrap tool {tool_def['name']}: {e}")
 
     return wrapped
+
+
+class FinancialsChartStruct(BaseModel):
+    """Dates and Values of the financials time series to chart."""
+
+    dates: List[str] = Field(
+        description="The dates of the financials time series to chart."
+    )
+    values: List[float] = Field(
+        description="The values of the financials time series to chart. Just the values, no other text."
+    )
 
 
 class State(TypedDict):
@@ -285,7 +283,8 @@ async def stock_price_node(state: State) -> Command[Literal["supervisor"]]:
     wrapped_tools = await load_tools_from_mcp_server(proc)
     tool_map = {tool.name: tool for tool in wrapped_tools}
 
-    stock_price_agent = create_mcp_stock_price_agent(agents_llm, tool_map)
+    react = ReActAgent(agents_llm, [tool_map["get_historical_prices"]])
+    stock_price_agent = react.agent
     result = await stock_price_agent.ainvoke(state)
 
     # ✅ Accessing Intermediate response tool call observation
@@ -354,7 +353,8 @@ async def financials_node(state: State) -> Command[Literal["supervisor"]]:
     wrapped_tools = await load_tools_from_mcp_server(proc)
     tool_map = {tool.name: tool for tool in wrapped_tools}
 
-    financials_agent = create_mcp_financials_agent(agents_llm, tool_map)
+    react = ReActAgent(agents_llm, [tool_map["get_financials"]])
+    financials_agent = react.agent
     result = await financials_agent.ainvoke(state)
 
     # ✅ Accessing Intermediate response tool call observation
@@ -374,7 +374,8 @@ async def financials_node(state: State) -> Command[Literal["supervisor"]]:
 def financials_chart_node(state: State) -> Command[Literal["supervisor"]]:
     logger.info("FINANCIALS CHART NODE - Processing request")
 
-    financials_chart_agent = create_financials_chart_agent(agents_llm)
+    react = ReActAgent(agents_llm, [tool_map["get_financials"]], FinancialsChartStruct)
+    financials_chart_agent = react.agent
     financials_chart_response = financials_chart_agent.invoke(state)
 
     last_message = financials_chart_response["messages"][-1].content
@@ -430,7 +431,8 @@ async def macroeconomics_node(state: State) -> Command[Literal["supervisor"]]:
     wrapped_tools = await load_tools_from_mcp_server(proc)
     tool_map = {tool.name: tool for tool in wrapped_tools}
 
-    macroeconomics_agent = create_mcp_macroeconomics_agent(agents_llm, tool_map)
+    react = ReActAgent(agents_llm, [tool_map["get_macroeconomic_series"]])
+    macroeconomics_agent = react.agent
     result = await macroeconomics_agent.ainvoke(state)
 
     # ✅ Accessing Intermediate response tool call observation
@@ -498,7 +500,8 @@ async def news_search_node(state: State) -> Command[Literal["supervisor"]]:
     wrapped_tools = await load_tools_from_mcp_server(proc)
     tool_map = {tool.name: tool for tool in wrapped_tools}
 
-    news_search_agent = create_mcp_news_search_agent(agents_llm, tool_map)
+    react = ReActAgent(agents_llm, [tool_map["search_news"]])
+    news_search_agent = react.agent
     result = await news_search_agent.ainvoke(state)
 
     return Command(
@@ -542,7 +545,8 @@ async def annual_report_node(state: State) -> Command[Literal["supervisor"]]:
         wrapped_tools = await load_tools_from_mcp_server(proc)
         tool_map = {tool.name: tool for tool in wrapped_tools}
 
-        annual_report_agent = create_mcp_annual_report_agent(agents_llm, tool_map)
+        react = ReActAgent(agents_llm, [tool_map["get_annual_report"]])
+        annual_report_agent = react.agent
         result = await annual_report_agent.ainvoke(state)
         latest_path = result["messages"][-2].content
 
