@@ -26,7 +26,7 @@ load_dotenv(env_path)
 def debug_log(msg: str) -> None:
     """
     Print debug information to stderr with MCP prefix for visibility.
-    
+
     Args:
         msg: The message to log
     """
@@ -36,10 +36,10 @@ def debug_log(msg: str) -> None:
 async def handle_request(request: dict) -> dict:
     """
     Process incoming MCP protocol requests and return appropriate responses.
-    
+
     Args:
         request: A dictionary containing the JSON-RPC request
-        
+
     Returns:
         A dictionary containing the JSON-RPC response
     """
