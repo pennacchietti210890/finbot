@@ -158,7 +158,7 @@ class State(TypedDict):
 
 
 def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
-    options = ["FINISH"] + members
+    options = ["FINISH", "INVALID_QUERY"] + members
     system_prompt = """You are a supervisor tasked with managing a conversation between the following workers: {workers}.
     
     Given the user request and the conversation history so far, respond with the worker to act next or FINISH if the request has been fully addressed.
@@ -172,6 +172,7 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
     5. ONLY proceed to the next worker if it's truly necessary to complete the user's request.
     6. If the user's request is about a different stock from what has been asked in the previous request, re-start the workflow with the new stock ticker.
     7. If no more workers are needed or the request has been addressed, respond with FINISH.
+    8. If the user's request is outside the scope of this financial assistant's capabilities or cannot be processed with available tools, respond with INVALID_QUERY.
     
     Current workers: {workers}
     """
@@ -250,7 +251,24 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
                 )
                 goto = "FINISH"
 
-            if goto == "FINISH":
+            # Handle special INVALID_QUERY case
+            if goto == "INVALID_QUERY":
+                logger.info("Router detected an invalid or unprocessable query")
+                return Command(
+                    goto=END,
+                    update={
+                        "next": "FINISH",
+                        "stock_ticker": state["stock_ticker"],
+                        "messages": state["messages"] + [
+                            {
+                                "role": "assistant",
+                                "content": "Your query cannot be processed with the current tools of this financial bot. Please try asking about stock prices, financial statements, macroeconomic indicators, or company annual reports.",
+                                "name": "system",
+                            }
+                        ],
+                    },
+                )
+            elif goto == "FINISH":
                 logger.info("Router decided to FINISH")
                 goto = END
             else:
@@ -261,8 +279,20 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
             )
         except Exception as e:
             logger.error(f"Error in supervisor node: {str(e)}", exc_info=True)
-            # If there's an error, default to ending the workflow
-            return Command(goto=END, update={"next": "FINISH"})
+            # If there's an error, default to ending the workflow with an error message
+            return Command(
+                goto=END,
+                update={
+                    "next": "FINISH",
+                    "messages": state["messages"] + [
+                        {
+                            "role": "assistant",
+                            "content": "I encountered an error processing your request. Please try rephrasing your question or ask about a different topic.",
+                            "name": "system",
+                        }
+                    ],
+                },
+            )
 
     return supervisor_node
 
@@ -280,7 +310,7 @@ async def stock_price_node(state: State) -> Command[Literal["supervisor"]]:
 
     wrapped_tools = await load_tools_from_mcp_server(proc)
     tool_map = {tool.name: tool for tool in wrapped_tools}
-
+    
     react = ReActAgent(agents_llm, [tool_map["get_historical_prices"]])
     stock_price_agent = react.agent
     result = await stock_price_agent.ainvoke(state)
@@ -369,9 +399,20 @@ async def financials_node(state: State) -> Command[Literal["supervisor"]]:
     )
 
 
-def financials_chart_node(state: State) -> Command[Literal["supervisor"]]:
+async def financials_chart_node(state: State) -> Command[Literal["supervisor"]]:
     logger.info("FINANCIALS CHART NODE - Processing request")
 
+    proc = await asyncio.create_subprocess_exec(
+        "python",
+        "app/finbot/mcp_finbot/mcp_servers_finbot.py",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    wrapped_tools = await load_tools_from_mcp_server(proc)
+    tool_map = {tool.name: tool for tool in wrapped_tools}
+    
     react = ReActAgent(agents_llm, [tool_map["get_financials"]], FinancialsChartStruct)
     financials_chart_agent = react.agent
     financials_chart_response = financials_chart_agent.invoke(state)

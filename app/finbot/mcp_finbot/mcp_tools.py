@@ -48,6 +48,7 @@ def get_historical_prices(ticker: str, day: int = 365) -> str:
                 "dates": hist.index.strftime("%Y-%m-%d").tolist(),
                 "prices": hist["Close"].values.tolist(),
             }
+            
             return json.dumps(stock_data)  # 🔹 Enforce JSON output
         else:
             return json.dumps({"error": "No data available"})
@@ -100,7 +101,7 @@ def get_financials(ticker: str) -> str:
         info = stock.info
         # Ensure info is not empty
         if not info:
-            print(f"No financial metrics available for {ticker}")
+            logger.info(f"No financial metrics available for {ticker}")
             return financials
 
         financials["key_metrics"] = KeyMetrics(
