@@ -1,6 +1,6 @@
 # FinBot - Financial Information Chatbot
 
-FinBot is an AI-powered chatbot that provides information about publicly listed companies, primarily from the S&P 500 index. Users can ask questions in natural language and receive AI-generated responses with relevant charts and financial insights.
+FinBot is an AI-powered chatbot that provides financial information around companies or macroeconomic indicators. It uses a set of tools to fetch relevant data and provide responses to users query. Tools rely mostly on free API, libraries such as yfinance for stock price data and listed company financial metrics, FRED API for macroeconomic data, Edagrd downloader for 10ks (publicly listed companies annual report data) and Tavily (non free) API for news.  
 
 ## UI Preview
 
@@ -15,24 +15,38 @@ finbot/
 │   ├── __init__.py
 │   ├── main.py          # FastAPI backend application
 │   ├── finbot/          # LangGraph agentic workflow
-│   │   ├── agents.py    # Agent definitions
 │   │   ├── graphs.py    # LangGraph structure
 │   │   ├── nodes.py     # Graph nodes 
 │   │   ├── services.py  # Singleton services (LLM, RAG engines)
-│   │   ├── tools.py     # Financial tools
 │   │   ├── mcp_agents.py # MCP-compatible agents
+│   │   ├── test_mcp_client.py # Test client for MCP
 │   │   └── mcp_finbot/   # MCP integration
 │   │       ├── mcp_tools.py        # MCP-compatible tools
 │   │       └── mcp_servers_finbot.py # MCP server configuration
 │   └── llm/             # LLM-related utilities
+│       ├── __init__.py  # Package initialization
 │       ├── llm_service.py  # LLM provider management
 │       ├── rag_query_engine.py # RAG implementation for annual reports
 │       └── groq.py      # Groq API integration
 ├── ui/
 │   ├── __init__.py
 │   ├── ui_dash.py       # Dash application with cyberpunk UI
+├── tests/               # Test directory
+│   ├── conftest.py      # Pytest fixtures and configuration
+│   ├── unit/            # Unit tests
+│   │   ├── test_supervisor_node.py
+│   │   ├── test_stock_price_nodes.py
+│   │   ├── test_rag_engine_service.py
+│   │   ├── test_annual_report_node.py
+│   │   ├── test_mcp_tools.py
+│   │   └── test_mcp_server.py
+│   └── functional/      # Functional tests
+│       └── test_graph_workflow.py
+├── images/              # UI images and screenshots
 ├── logs/                # Application logs directory
+├── run_frontend.py      # Frontend runner script
 ├── pyproject.toml       # Poetry configuration and dependencies
+├── requirements.txt     # Plain pip requirements file
 ├── .env.example         # Example environment variables
 └── README.md            # This file
 ```
@@ -43,7 +57,7 @@ finbot/
 
 - Python 3.13 or higher
 - [Poetry](https://python-poetry.org/docs/#installation) dependency manager
-- OpenAI API key (or Groq API key)
+- OpenAI API key 
 
 ### Installation
 
@@ -62,9 +76,6 @@ finbot/
    ```
    # For OpenAI
    OPENAI_API_KEY=your_openai_api_key
-   
-   # For Groq (optional)
-   GROQ_API_KEY=your_groq_api_key
    ```
 
 4. Install dependencies using Poetry:
@@ -116,7 +127,7 @@ poetry add --group dev package-name
 
 1. Open the app in your browser at `http://localhost:8502`.
 2. You'll see an interface with example questions displayed.
-3. Click on any example question or type your own query about a publicly listed company.
+3. Click on any example question or type your own financial/macro query.
 4. The chat interface will appear with the AI-generated response and any relevant charts.
 5. Continue your conversation with follow-up questions.
 
@@ -132,7 +143,7 @@ FinBot uses LangGraph, a framework for building stateful, multi-agent workflows:
 - **Annual Reports Analysis**: RAG-powered processing of SEC 10-K filings.
 
 The workflow consists of:
-1. A supervisor node that routes the user query to the appropriate worker
+1. A supervisor node that routes the user query to the appropriate worker while returning a default answer if user query cannot bet met by existing nodes and their tools
 2. Specialized worker nodes for different tasks:
    - Stock price data retrieval
    - Chart generation
@@ -141,30 +152,15 @@ The workflow consists of:
    - News search
    - Macroeconomic data analysis
 
-## Recent Updates
 
-### MCP Compatibility
+## MCP Compatibility
 
-FinBot now supports the Model Context Protocol (MCP) (with a similar implementation to the official MCP Python SDK), allowing for more flexible deployment and integration:
+FinBot has a basic implementation of the Model Context Protocol (MCP) (custom made, official Python SDK for MCP has at the moment dependency issues with langhcain adapters), allowing for more flexible deployment and integration:
 
 - **MCP-Compatible Tools**: Financial tools have been adapted to work with the MCP protocol.
 - **MCP Server**: Dedicated server implementation for MCP-based communication.
 - **Cross-Platform Integration**: Enables FinBot tools to be used across different LLM providers and applications that support MCP.
 
-### RAG for Annual Reports
-
-Added Retrieval-Augmented Generation (RAG) capabilities for analyzing company annual reports:
-
-- **SEC 10-K Integration**: Automatically fetches the latest annual reports from the SEC.
-- **RAG Engine Service**: Centralized service that manages indexed reports.
-- **Vector-Based Retrieval**: Efficient searching through lengthy reports.
-- **Contextual Answers**: Provides specific answers to questions about company financials, risks, and strategies.
-
-### Enhanced Data Visualization
-
-- **Multiple Chart Types**: Support for line charts, bar charts, and more.
-- **Financial Chart Formatting**: Specialized formatting for financial metrics.
-- **Markdown Rendering**: Improved text formatting in the chat interface.
 
 ## Example Questions
 
@@ -174,15 +170,7 @@ Added Retrieval-Augmented Generation (RAG) capabilities for analyzing company an
 - What is the P/E ratio of Amazon compared to industry average?
 - Show me the dividend yield for Coca-Cola
 - What risks does Apple mention in their latest annual report?
-- What macroeconomic factors affected tech stocks in the last year?
 
-## Features
-
-- Natural language processing for financial queries
-- Integration with financial data sources via LangGraph
-- Dynamic chart generation for data visualization
-- RAG-powered analysis of annual reports
-- Conversational UI with persistent chat history
 
 ## Limitations
 
