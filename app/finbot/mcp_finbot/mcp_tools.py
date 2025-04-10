@@ -48,7 +48,7 @@ def get_historical_prices(ticker: str, day: int = 365) -> str:
                 "dates": hist.index.strftime("%Y-%m-%d").tolist(),
                 "prices": hist["Close"].values.tolist(),
             }
-            
+
             return json.dumps(stock_data)  # 🔹 Enforce JSON output
         else:
             return json.dumps({"error": "No data available"})

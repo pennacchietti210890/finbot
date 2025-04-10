@@ -9,10 +9,13 @@ from typing import Dict
 import requests
 from dotenv import load_dotenv
 
-from app.finbot.mcp_finbot.mcp_tools import (get_annual_report, get_financials,
-                                             get_historical_prices,
-                                             get_macroeconomic_series,
-                                             search_news)
+from app.finbot.mcp_finbot.mcp_tools import (
+    get_annual_report,
+    get_financials,
+    get_historical_prices,
+    get_macroeconomic_series,
+    search_news,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)

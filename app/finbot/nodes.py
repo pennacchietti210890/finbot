@@ -259,7 +259,8 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
                     update={
                         "next": "FINISH",
                         "stock_ticker": state["stock_ticker"],
-                        "messages": state["messages"] + [
+                        "messages": state["messages"]
+                        + [
                             {
                                 "role": "assistant",
                                 "content": "Your query cannot be processed with the current tools of this financial bot. Please try asking about stock prices, financial statements, macroeconomic indicators, or company annual reports.",
@@ -284,7 +285,8 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
                 goto=END,
                 update={
                     "next": "FINISH",
-                    "messages": state["messages"] + [
+                    "messages": state["messages"]
+                    + [
                         {
                             "role": "assistant",
                             "content": "I encountered an error processing your request. Please try rephrasing your question or ask about a different topic.",
@@ -310,7 +312,7 @@ async def stock_price_node(state: State) -> Command[Literal["supervisor"]]:
 
     wrapped_tools = await load_tools_from_mcp_server(proc)
     tool_map = {tool.name: tool for tool in wrapped_tools}
-    
+
     react = ReActAgent(agents_llm, [tool_map["get_historical_prices"]])
     stock_price_agent = react.agent
     result = await stock_price_agent.ainvoke(state)
@@ -412,7 +414,7 @@ async def financials_chart_node(state: State) -> Command[Literal["supervisor"]]:
 
     wrapped_tools = await load_tools_from_mcp_server(proc)
     tool_map = {tool.name: tool for tool in wrapped_tools}
-    
+
     react = ReActAgent(agents_llm, [tool_map["get_financials"]], FinancialsChartStruct)
     financials_chart_agent = react.agent
     financials_chart_response = financials_chart_agent.invoke(state)

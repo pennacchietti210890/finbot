@@ -1,11 +1,18 @@
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, StateGraph
 
-from app.finbot.nodes import (State, annual_report_node, financials_chart_node,
-                              financials_node, macroeconomics_chart_node,
-                              macroeconomics_node, make_supervisor_node,
-                              news_search_node, stock_price_chart_node,
-                              stock_price_node)
+from app.finbot.nodes import (
+    State,
+    annual_report_node,
+    financials_chart_node,
+    financials_node,
+    macroeconomics_chart_node,
+    macroeconomics_node,
+    make_supervisor_node,
+    news_search_node,
+    stock_price_chart_node,
+    stock_price_node,
+)
 
 
 def create_graph(llm):

@@ -16,13 +16,13 @@ async def test_handle_request_initialize():
         "params": {
             "protocolVersion": "2024-11-05",
             "capabilities": {"roots": {"listChanged": True}},
-            "clientInfo": {"name": "test-client", "version": "0.1.0"}
-        }
+            "clientInfo": {"name": "test-client", "version": "0.1.0"},
+        },
     }
-    
-    with patch('app.finbot.mcp_finbot.mcp_servers_finbot.debug_log'):
+
+    with patch("app.finbot.mcp_finbot.mcp_servers_finbot.debug_log"):
         response = await handle_request(request)
-        
+
         assert response["jsonrpc"] == "2.0"
         assert response["id"] == 1
         assert "result" in response
@@ -34,24 +34,20 @@ async def test_handle_request_initialize():
 @pytest.mark.asyncio
 async def test_handle_request_tools_list():
     """Test that the MCP server handles tools/list requests correctly."""
-    request = {
-        "jsonrpc": "2.0",
-        "id": 2,
-        "method": "tools/list"
-    }
-    
-    with patch('app.finbot.mcp_finbot.mcp_servers_finbot.debug_log'):
+    request = {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}
+
+    with patch("app.finbot.mcp_finbot.mcp_servers_finbot.debug_log"):
         response = await handle_request(request)
-        
+
         assert response["jsonrpc"] == "2.0"
         assert response["id"] == 2
         assert "result" in response
         assert "tools" in response["result"]
-        
+
         tools = response["result"]["tools"]
         assert isinstance(tools, list)
         assert len(tools) > 0
-        
+
         # Verify the structure of the first tool
         tool = tools[0]
         assert "name" in tool
@@ -68,23 +64,20 @@ async def test_handle_request_tools_call():
         "method": "tools/call",
         "params": {
             "tool_name": "get_historical_prices",
-            "arguments": {
-                "ticker": "AAPL",
-                "day": "30"
-            }
-        }
+            "arguments": {"ticker": "AAPL", "day": "30"},
+        },
     }
-    
-    mock_result = json.dumps({
-        "dates": ["2023-01-01", "2023-01-02"],
-        "prices": [150.25, 152.75]
-    })
-    
-    with patch('app.finbot.mcp_finbot.mcp_tools.get_historical_prices', return_value=mock_result), \
-         patch('app.finbot.mcp_finbot.mcp_servers_finbot.debug_log'):
-        
+
+    mock_result = json.dumps(
+        {"dates": ["2023-01-01", "2023-01-02"], "prices": [150.25, 152.75]}
+    )
+
+    with patch(
+        "app.finbot.mcp_finbot.mcp_tools.get_historical_prices",
+        return_value=mock_result,
+    ), patch("app.finbot.mcp_finbot.mcp_servers_finbot.debug_log"):
         response = await handle_request(request)
-        
+
         assert response["jsonrpc"] == "2.0"
         assert response["id"] == 3
         assert "result" in response
@@ -94,15 +87,11 @@ async def test_handle_request_tools_call():
 @pytest.mark.asyncio
 async def test_handle_request_invalid_method():
     """Test that the MCP server handles invalid method requests correctly."""
-    request = {
-        "jsonrpc": "2.0",
-        "id": 4,
-        "method": "invalid_method"
-    }
-    
-    with patch('app.finbot.mcp_finbot.mcp_servers_finbot.debug_log'):
+    request = {"jsonrpc": "2.0", "id": 4, "method": "invalid_method"}
+
+    with patch("app.finbot.mcp_finbot.mcp_servers_finbot.debug_log"):
         response = await handle_request(request)
-        
+
         assert response["id"] == 4
         assert "error" in response
         assert "message" in response["error"]
@@ -116,17 +105,14 @@ async def test_handle_request_invalid_tool():
         "jsonrpc": "2.0",
         "id": 5,
         "method": "tools/call",
-        "params": {
-            "tool_name": "invalid_tool",
-            "arguments": {}
-        }
+        "params": {"tool_name": "invalid_tool", "arguments": {}},
     }
-    
-    with patch('app.finbot.mcp_finbot.mcp_servers_finbot.debug_log'):
+
+    with patch("app.finbot.mcp_finbot.mcp_servers_finbot.debug_log"):
         response = await handle_request(request)
-        
+
         assert response["jsonrpc"] == "2.0"
         assert response["id"] == 5
         assert "error" in response
         assert "message" in response["error"]
-        assert "Unknown tool" in response["error"]["message"] 
+        assert "Unknown tool" in response["error"]["message"]
