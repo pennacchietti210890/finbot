@@ -25,7 +25,7 @@ EXAMPLE_QUESTIONS = [
 ]
 
 # Constants
-API_URL = os.getenv("API_URL", "http://localhost:8000")
+API_URL = os.getenv("API_URL", "http://localhost:8000"))
 
 # Initialize the Dash app
 app = dash.Dash(
