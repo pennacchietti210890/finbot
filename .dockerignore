@@ -1,0 +1,27 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+
+# Virtual Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Local development files
+.git
+.gitignore
+
+# Do NOT ignore any Python modules or packages
+!**/__init__.py
+!**/*.py
+
+# Build artifacts
+*.egg-info/
+dist/
+build/ 

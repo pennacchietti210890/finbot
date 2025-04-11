@@ -12,7 +12,6 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool, Tool
 from langchain_core.utils.function_calling import convert_to_openai_function
 from langchain_groq import ChatGroq
-from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.graph.message import add_messages
@@ -42,10 +41,41 @@ mcp_script_path = os.path.abspath("app/finbot/mcp_finbot/mcp_servers_finbot.py")
 
 # Low-level MCP request
 async def send_mcp_message(proc, message: dict):
-    proc.stdin.write((json.dumps(message) + "\n").encode())
-    await proc.stdin.drain()
-    line = await proc.stdout.readline()
-    return json.loads(line)
+    try:
+        # Log the message being sent
+        logger.info(f"Sending MCP message: {json.dumps(message)}")
+        
+        # Send message to subprocess
+        proc.stdin.write((json.dumps(message) + "\n").encode())
+        await proc.stdin.drain()
+        
+        # Read response with timeout
+        line = await asyncio.wait_for(proc.stdout.readline(), timeout=10.0)
+        
+        # Check if response is empty
+        if not line:
+            logger.error("Received empty response from MCP server")
+            # Check stderr for any errors
+            stderr_data = await proc.stderr.read(1024)
+            if stderr_data:
+                logger.error(f"MCP server stderr: {stderr_data.decode('utf-8')}")
+            return {"error": "No response from MCP server"}
+        
+        # Log raw response
+        logger.info(f"Received raw MCP response: {line.decode('utf-8').strip()}")
+        
+        # Parse JSON
+        return json.loads(line.decode('utf-8'))
+    except asyncio.TimeoutError:
+        logger.error("Timeout waiting for MCP server response")
+        return {"error": "Timeout waiting for MCP server response"}
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse MCP server response as JSON: {e}")
+        logger.error(f"Raw response: {line if 'line' in locals() else 'No response'}")
+        return {"error": f"Invalid JSON response: {str(e)}"}
+    except Exception as e:
+        logger.error(f"Error in MCP communication: {str(e)}")
+        return {"error": f"MCP communication error: {str(e)}"}
 
 
 # Tool calling function
@@ -57,10 +87,20 @@ async def call_tool(proc, tool_name: str, arguments: dict) -> str:
         "params": {"tool_name": tool_name, "arguments": arguments},
     }
     response = await send_mcp_message(proc, msg)
-    logger.info("🧪 MCP raw response:", response)
-    # Check if result exists
+    logger.info(f"🧪 MCP raw response: {response}")
+    
+    # Check for error in send_mcp_message response
+    if "error" in response:
+        error_msg = response["error"]
+        logger.error(f"❌ MCP communication error: {error_msg}")
+        return json.dumps({"error": f"Failed to call tool {tool_name}: {error_msg}"})
+    
+    # Check if result exists in the response
     if "result" not in response:
-        raise ValueError(f"❌ MCP tool call failed, response: {response}")
+        error_msg = f"❌ MCP tool call failed, response: {response}"
+        logger.error(error_msg)
+        return json.dumps({"error": error_msg})
+    
     return response["result"]["output"]
 
 
@@ -121,6 +161,20 @@ def wrap_tool_for_langchain(tool_schema, proc):
 async def load_tools_from_mcp_server(proc):
     msg = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
     response = await send_mcp_message(proc, msg)
+    
+    # Check for error in send_mcp_message response
+    if "error" in response:
+        error_msg = response["error"]
+        logger.error(f"❌ Failed to load MCP tools: {error_msg}")
+        # Return a dummy tool that returns an error message
+        return [create_error_tool(f"MCP server error: {error_msg}")]
+    
+    # Check if result exists in the response
+    if "result" not in response or "tools" not in response["result"]:
+        error_msg = f"❌ Invalid MCP response format: {response}"
+        logger.error(error_msg)
+        return [create_error_tool("Failed to load MCP tools due to invalid response format")]
+    
     raw_tools = response["result"]["tools"]
     wrapped = []
     for tool_def in raw_tools:
@@ -132,8 +186,27 @@ async def load_tools_from_mcp_server(proc):
                 wrapped.append(tool)
         except Exception as e:
             logger.info(f"❌ Failed to wrap tool {tool_def['name']}: {e}")
-
+    
+    if not wrapped:
+        logger.error("❌ No tools were successfully wrapped!")
+        return [create_error_tool("No MCP tools could be loaded")]
+    
     return wrapped
+
+
+# Create a dummy tool that returns an error message
+def create_error_tool(error_message):
+    class ErrorTool(BaseTool):
+        name = "error_tool"
+        description = "This tool reports an error with the MCP server"
+        
+        def _run(self, *args, **kwargs):
+            return json.dumps({"error": error_message})
+        
+        async def _arun(self, *args, **kwargs):
+            return json.dumps({"error": error_message})
+    
+    return ErrorTool()
 
 
 class FinancialsChartStruct(BaseModel):
@@ -301,38 +374,129 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
 
 async def stock_price_node(state: State) -> Command[Literal["supervisor"]]:
     logger.info("STOCK PRICE NODE - Processing request")
-
-    proc = await asyncio.create_subprocess_exec(
-        "python",
-        "app/finbot/mcp_finbot/mcp_servers_finbot.py",
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-
-    wrapped_tools = await load_tools_from_mcp_server(proc)
-    tool_map = {tool.name: tool for tool in wrapped_tools}
-
-    react = ReActAgent(agents_llm, [tool_map["get_historical_prices"]])
-    stock_price_agent = react.agent
-    result = await stock_price_agent.ainvoke(state)
-
-    # ✅ Accessing Intermediate response tool call observation
-    stock_data = result["messages"][-2].content  # Already a JSON dict
-    last_message = result["messages"][-1].content  # Already a JSON dict
-    logger.info("STOCK PRICE NODE - Retrieved stock data and message")
-    logger.info(f"{stock_data}")
-
-    return Command(
-        update={
-            "messages": [
-                {"role": "assistant", "content": last_message, "name": "stock_price"}
-            ],
-            # [HumanMessage(content=last_message, name="stock_price")],
-            "stock_data": stock_data,  # ✅ Directly store tool output
-        },
-        goto="supervisor",
-    )
+    
+    try:
+        # Start the MCP server subprocess
+        logger.info("Starting MCP server subprocess")
+        proc = await asyncio.create_subprocess_exec(
+            "python",
+            "app/finbot/mcp_finbot/mcp_servers_finbot.py",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        
+        # Load tools from the MCP server
+        logger.info("Loading tools from MCP server")
+        wrapped_tools = await load_tools_from_mcp_server(proc)
+        
+        if not wrapped_tools:
+            logger.error("No tools were loaded from the MCP server")
+            return Command(
+                update={
+                    "messages": [
+                        {
+                            "role": "assistant",
+                            "content": "I'm sorry, but I couldn't access the stock price tools. Please try again later.",
+                            "name": "stock_price"
+                        }
+                    ]
+                },
+                goto="supervisor",
+            )
+        
+        # Check if any tool is an error tool
+        for tool in wrapped_tools:
+            if tool.name == "error_tool":
+                logger.error(f"Error tool detected: {tool.description}")
+                return Command(
+                    update={
+                        "messages": [
+                            {
+                                "role": "assistant",
+                                "content": f"I'm sorry, but there was an issue with the stock price service: {tool._run()}",
+                                "name": "stock_price"
+                            }
+                        ]
+                    },
+                    goto="supervisor",
+                )
+        
+        # Map tools by name
+        tool_map = {tool.name: tool for tool in wrapped_tools}
+        
+        # Check if the required tool is available
+        if "get_historical_prices" not in tool_map:
+            logger.error("get_historical_prices tool not found in loaded tools")
+            return Command(
+                update={
+                    "messages": [
+                        {
+                            "role": "assistant",
+                            "content": "I'm sorry, but the stock price tool is not available. Please try again later.",
+                            "name": "stock_price"
+                        }
+                    ]
+                },
+                goto="supervisor",
+            )
+        
+        # Create and run the agent
+        logger.info("Creating ReActAgent with get_historical_prices tool")
+        react = ReActAgent(agents_llm, [tool_map["get_historical_prices"]])
+        stock_price_agent = react.agent
+        result = await stock_price_agent.ainvoke(state)
+        
+        # Process the result
+        logger.info("Stock price agent execution completed")
+        if "messages" not in result or len(result["messages"]) < 2:
+            logger.error(f"Invalid result format from stock_price_agent: {result}")
+            return Command(
+                update={
+                    "messages": [
+                        {
+                            "role": "assistant",
+                            "content": "I'm sorry, but I couldn't retrieve the stock price data in the expected format.",
+                            "name": "stock_price"
+                        }
+                    ]
+                },
+                goto="supervisor",
+            )
+        
+        # Extract data from result
+        stock_data = result["messages"][-2].content
+        last_message = result["messages"][-1].content
+        logger.info("STOCK PRICE NODE - Retrieved stock data and message")
+        logger.info(f"Stock data: {stock_data}")
+        
+        return Command(
+            update={
+                "messages": [
+                    {"role": "assistant", "content": last_message, "name": "stock_price"}
+                ],
+                "stock_data": stock_data,
+            },
+            goto="supervisor",
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in stock_price_node: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        
+        return Command(
+            update={
+                "messages": [
+                    {
+                        "role": "assistant",
+                        "content": f"I'm sorry, but I encountered an error while processing your stock price request: {str(e)}",
+                        "name": "stock_price"
+                    }
+                ]
+            },
+            goto="supervisor",
+        )
 
 
 def stock_price_chart_node(state: State) -> Command[Literal["supervisor"]]:

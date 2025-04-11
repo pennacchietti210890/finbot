@@ -240,8 +240,14 @@ async def chat(request: ChatRequest):
 def main():
     """Entry point for running the FastAPI application"""
     logger.info("Starting FastAPI application")
+    return app
+
+def main_local():
+    # Only run uvicorn directly when script is executed, not when imported
+    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
 if __name__ == "__main__":
-    main()
+    # Only run uvicorn directly when script is executed, not when imported
+    main_local()
