@@ -71,6 +71,15 @@ resource "kubernetes_deployment" "backend" {
               }
             }
           }
+          env {
+            name  = "MCP_SERVER_URL"
+           value_from {
+              secret_key_ref {
+                name = "finbot-secrets"
+                key = "MCP_SERVER_URL"
+              }
+           }
+          }
         }
       }
     }

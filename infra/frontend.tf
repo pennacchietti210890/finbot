@@ -35,6 +35,9 @@ resource "kubernetes_deployment" "frontend" {
             value = "http://finbot-backend:8000"
         }
 
+          command = ["gunicorn"]
+          args    = ["--timeout", "120", "-b", "0.0.0.0:8502", "ui.ui_dash:server"]
+
         resources {
             limits = {
                 cpu    = "250m"

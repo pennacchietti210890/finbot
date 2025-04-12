@@ -39,3 +39,7 @@ logs/
 .env.development.local
 .env.test.local
 .env.production.local 
+infra/.terraform/providers/registry.terraform.io/hashicorp/kubernetes/2.36.0/darwin_arm64/terraform-provider-kubernetes_v2.36.0_x5
+infra/.terraform/providers/registry.terraform.io/hashicorp/google/6.29.0/darwin_arm64/terraform-provider-google_v6.29.0_x5
+infra/terraform.tfstate.backup
+infra/terraform.tfstate

@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field, create_model
 from app.finbot.mcp_agents import ReActAgent
 from app.llm.llm_service import LLMService
 from app.llm.rag_query_engine import RAGEngine
+import aiohttp
 
 # Get the logger for this module
 logger = logging.getLogger(__name__)
@@ -36,84 +37,46 @@ agents_llm = LLMService(
 ).client
 
 
-mcp_script_path = os.path.abspath("app/finbot/mcp_finbot/mcp_servers_finbot.py")
+MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:5005")
 
 
-# Low-level MCP request
-async def send_mcp_message(proc, message: dict):
+async def fetch_tool_list() -> dict:
     try:
-        # Log the message being sent
-        logger.info(f"Sending MCP message: {json.dumps(message)}")
-        
-        # Send message to subprocess
-        proc.stdin.write((json.dumps(message) + "\n").encode())
-        await proc.stdin.drain()
-        
-        # Read response with timeout
-        line = await asyncio.wait_for(proc.stdout.readline(), timeout=10.0)
-        
-        # Check if response is empty
-        if not line:
-            logger.error("Received empty response from MCP server")
-            # Check stderr for any errors
-            stderr_data = await proc.stderr.read(1024)
-            if stderr_data:
-                logger.error(f"MCP server stderr: {stderr_data.decode('utf-8')}")
-            return {"error": "No response from MCP server"}
-        
-        # Log raw response
-        logger.info(f"Received raw MCP response: {line.decode('utf-8').strip()}")
-        
-        # Parse JSON
-        return json.loads(line.decode('utf-8'))
+        async with aiohttp.ClientSession() as session:
+            async with session.post(f"{MCP_SERVER_URL}/tools/list", timeout=10) as resp:
+                if resp.status != 200:
+                    return {"error": f"HTTP {resp.status}"}
+                return await resp.json()
     except asyncio.TimeoutError:
-        logger.error("Timeout waiting for MCP server response")
-        return {"error": "Timeout waiting for MCP server response"}
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse MCP server response as JSON: {e}")
-        logger.error(f"Raw response: {line if 'line' in locals() else 'No response'}")
-        return {"error": f"Invalid JSON response: {str(e)}"}
+        return {"error": "Timeout while requesting tool list"}
     except Exception as e:
-        logger.error(f"Error in MCP communication: {str(e)}")
-        return {"error": f"MCP communication error: {str(e)}"}
+        return {"error": f"Error: {str(e)}"}
 
-
-# Tool calling function
-async def call_tool(proc, tool_name: str, arguments: dict) -> str:
-    msg = {
-        "jsonrpc": "2.0",
-        "id": 42,  # could randomize or increment
-        "method": "tools/call",
-        "params": {"tool_name": tool_name, "arguments": arguments},
-    }
-    response = await send_mcp_message(proc, msg)
-    logger.info(f"🧪 MCP raw response: {response}")
-    
-    # Check for error in send_mcp_message response
-    if "error" in response:
-        error_msg = response["error"]
-        logger.error(f"❌ MCP communication error: {error_msg}")
-        return json.dumps({"error": f"Failed to call tool {tool_name}: {error_msg}"})
-    
-    # Check if result exists in the response
-    if "result" not in response:
-        error_msg = f"❌ MCP tool call failed, response: {response}"
-        logger.error(error_msg)
-        return json.dumps({"error": error_msg})
-    
-    return response["result"]["output"]
+async def call_tool_http(tool_name: str, arguments: dict) -> dict:
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{MCP_SERVER_URL}/tools/call",
+                json={"tool_name": tool_name, "arguments": arguments},
+                timeout=15,
+            ) as resp:
+                if resp.status != 200:
+                    return {"error": f"HTTP {resp.status}"}
+                return await resp.json()
+    except asyncio.TimeoutError:
+        return {"error": "Timeout calling MCP tool"}
+    except Exception as e:
+        return {"error": f"Error calling MCP tool: {str(e)}"}
 
 
 # Wrap raw MCP tool schema into LangChain @tool
 class MCPTool(BaseTool):
     name: str
     description: str
-    proc: Any
     tool_name: str
     input_schema: Dict[str, Any]
 
     def __init__(self, **kwargs):
-        # Dynamically create a Pydantic model for input schema
         type_map = {
             "string": str,
             "integer": int,
@@ -129,69 +92,53 @@ class MCPTool(BaseTool):
         }
 
         schema = create_model(f"{kwargs['tool_name'].title()}Schema", **schema_fields)
-
-        kwargs["args_schema"] = schema  # ✅ tell LangChain this is your input model
+        kwargs["args_schema"] = schema
         super().__init__(**kwargs)
 
     async def _arun(self, *args, **kwargs):
-        tool_input = args[0] if args else kwargs.get("tool_input", {})
-        logger.info(f"{args}")
-        logger.info(f"{kwargs}")
-        result = await call_tool(self.proc, self.tool_name, kwargs)
-        return result if isinstance(result, str) else json.dumps(result)
+        logger.info(f"Calling MCP tool: {self.tool_name} with args: {kwargs}")
+        response = await call_tool_http(self.tool_name, kwargs)
+        if "error" in response:
+            return json.dumps({"error": response["error"]})
+        return response["output"]
 
     def _run(self, tool_input: dict, **kwargs):
         raise NotImplementedError("Only async supported")
 
 
-def wrap_tool_for_langchain(tool_schema, proc):
-    tool_name = tool_schema["name"]
-    description = tool_schema.get("description", "")
 
+def wrap_tool_for_langchain(tool_schema):
     return MCPTool(
-        name=tool_name,
-        description=description,
-        proc=proc,
+        name=tool_schema["name"],
+        description=tool_schema.get("description", ""),
         tool_name=tool_schema["name"],
-        input_schema=tool_schema["inputSchema"],  # from MCP tools/list
+        input_schema=tool_schema["inputSchema"],
     )
 
 
 # ✅ Main helper: load LangChain tools from MCP server
-async def load_tools_from_mcp_server(proc):
-    msg = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
-    response = await send_mcp_message(proc, msg)
-    
-    # Check for error in send_mcp_message response
+async def load_tools_from_mcp_server():
+    response = await fetch_tool_list()
+
     if "error" in response:
-        error_msg = response["error"]
-        logger.error(f"❌ Failed to load MCP tools: {error_msg}")
-        # Return a dummy tool that returns an error message
-        return [create_error_tool(f"MCP server error: {error_msg}")]
-    
-    # Check if result exists in the response
-    if "result" not in response or "tools" not in response["result"]:
-        error_msg = f"❌ Invalid MCP response format: {response}"
-        logger.error(error_msg)
-        return [create_error_tool("Failed to load MCP tools due to invalid response format")]
-    
-    raw_tools = response["result"]["tools"]
+        return [create_error_tool(f"MCP server error: {response['error']}")]
+
+    tools = response.get("tools", [])
+    if not tools:
+        return [create_error_tool("No tools returned from MCP server")]
+
     wrapped = []
-    for tool_def in raw_tools:
+    for tool_def in tools:
         try:
-            tool = wrap_tool_for_langchain(tool_def, proc)
-            if tool is None:
-                logger.info(f"⚠️ Tool {tool_def['name']} returned None!")
-            else:
-                wrapped.append(tool)
+            tool = wrap_tool_for_langchain(tool_def)
+            wrapped.append(tool)
         except Exception as e:
-            logger.info(f"❌ Failed to wrap tool {tool_def['name']}: {e}")
-    
+            logger.error(f"Error wrapping tool {tool_def['name']}: {e}")
+
     if not wrapped:
-        logger.error("❌ No tools were successfully wrapped!")
         return [create_error_tool("No MCP tools could be loaded")]
-    
     return wrapped
+
 
 
 # Create a dummy tool that returns an error message
@@ -375,20 +322,10 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
 async def stock_price_node(state: State) -> Command[Literal["supervisor"]]:
     logger.info("STOCK PRICE NODE - Processing request")
     
-    try:
-        # Start the MCP server subprocess
-        logger.info("Starting MCP server subprocess")
-        proc = await asyncio.create_subprocess_exec(
-            "python",
-            "app/finbot/mcp_finbot/mcp_servers_finbot.py",
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        
+    try:        
         # Load tools from the MCP server
         logger.info("Loading tools from MCP server")
-        wrapped_tools = await load_tools_from_mcp_server(proc)
+        wrapped_tools = await load_tools_from_mcp_server()
         
         if not wrapped_tools:
             logger.error("No tools were loaded from the MCP server")
@@ -536,15 +473,7 @@ def stock_price_chart_node(state: State) -> Command[Literal["supervisor"]]:
 async def financials_node(state: State) -> Command[Literal["supervisor"]]:
     logger.info("FINANCIALS NODE - Processing request")
 
-    proc = await asyncio.create_subprocess_exec(
-        "python",
-        "app/finbot/mcp_finbot/mcp_servers_finbot.py",
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-
-    wrapped_tools = await load_tools_from_mcp_server(proc)
+    wrapped_tools = await load_tools_from_mcp_server()
     tool_map = {tool.name: tool for tool in wrapped_tools}
 
     react = ReActAgent(agents_llm, [tool_map["get_financials"]])
@@ -568,15 +497,7 @@ async def financials_node(state: State) -> Command[Literal["supervisor"]]:
 async def financials_chart_node(state: State) -> Command[Literal["supervisor"]]:
     logger.info("FINANCIALS CHART NODE - Processing request")
 
-    proc = await asyncio.create_subprocess_exec(
-        "python",
-        "app/finbot/mcp_finbot/mcp_servers_finbot.py",
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-
-    wrapped_tools = await load_tools_from_mcp_server(proc)
+    wrapped_tools = await load_tools_from_mcp_server()
     tool_map = {tool.name: tool for tool in wrapped_tools}
 
     react = ReActAgent(agents_llm, [tool_map["get_financials"]], FinancialsChartStruct)
@@ -625,15 +546,7 @@ async def financials_chart_node(state: State) -> Command[Literal["supervisor"]]:
 async def macroeconomics_node(state: State) -> Command[Literal["supervisor"]]:
     logger.info("MACROECONOMICS NODE - Processing request")
 
-    proc = await asyncio.create_subprocess_exec(
-        "python",
-        "app/finbot/mcp_finbot/mcp_servers_finbot.py",
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-
-    wrapped_tools = await load_tools_from_mcp_server(proc)
+    wrapped_tools = await load_tools_from_mcp_server()
     tool_map = {tool.name: tool for tool in wrapped_tools}
 
     react = ReActAgent(agents_llm, [tool_map["get_macroeconomic_series"]])
@@ -694,15 +607,7 @@ def macroeconomics_chart_node(state: State) -> Command[Literal["supervisor"]]:
 async def news_search_node(state: State) -> Command[Literal["supervisor"]]:
     logger.info("NEWS SEARCH NODE - Processing request")
 
-    proc = await asyncio.create_subprocess_exec(
-        "python",
-        "app/finbot/mcp_finbot/mcp_servers_finbot.py",
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-
-    wrapped_tools = await load_tools_from_mcp_server(proc)
+    wrapped_tools = await load_tools_from_mcp_server()
     tool_map = {tool.name: tool for tool in wrapped_tools}
 
     react = ReActAgent(agents_llm, [tool_map["search_news"]])
@@ -739,15 +644,7 @@ async def annual_report_node(state: State) -> Command[Literal["supervisor"]]:
             f"No RAG engine found for {state['stock_ticker']}, need to fetch annual report first"
         )
 
-        proc = await asyncio.create_subprocess_exec(
-            "python",
-            "app/finbot/mcp_finbot/mcp_servers_finbot.py",
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-
-        wrapped_tools = await load_tools_from_mcp_server(proc)
+        wrapped_tools = await load_tools_from_mcp_server()
         tool_map = {tool.name: tool for tool in wrapped_tools}
 
         react = ReActAgent(agents_llm, [tool_map["get_annual_report"]])

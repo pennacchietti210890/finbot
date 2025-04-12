@@ -54,6 +54,7 @@ pylint = "^3.3.6"
 [tool.poetry.scripts]
 start-backend = "app.main:main_local"
 start-frontend = "run_frontend:main"
+start-mcp = "app.finbot.mcp_finbot.mcp_servers_finbot:main_local"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

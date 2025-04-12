@@ -1,0 +1,24 @@
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Copy only requirements first for caching
+COPY requirements.txt /app/
+
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the entire project to ensure proper import path structure
+COPY . /app/
+
+# Set environment variables for additional debugging
+ENV PYTHONUNBUFFERED=1
+# Configure Python path to include the parent directory so 'app' is discoverable
+ENV PYTHONPATH="/app:${PYTHONPATH}"
+
+# Expose port MCP will run on
+EXPOSE 5005
+
+# Start the FastAPI MCP server
+CMD ["uvicorn", "app.finbot.mcp_finbot.mcp_servers_finbot:app", "--host", "0.0.0.0", "--port", "5005"]

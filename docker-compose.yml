@@ -11,6 +11,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - FRED_API_KEY=${FRED_API_KEY}
       - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - MCP_SERVER_URL=http://mcp:5005
     volumes:
       - ./app:/app/app
       - ./backend:/app/backend
@@ -32,6 +33,21 @@ services:
       - backend
     volumes:
       - ./frontend:/app/frontend
+    networks:
+      - finbot-network
+
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+      platforms:
+        - linux/amd64
+    ports:
+      - "5005:5005"
+    environment:
+      - FRED_API_KEY=${FRED_API_KEY}
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - MCP_SERVER_URL=${MCP_SERVER_URL}
     networks:
       - finbot-network
 
