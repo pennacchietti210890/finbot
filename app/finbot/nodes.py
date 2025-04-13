@@ -54,6 +54,7 @@ async def fetch_tool_list() -> dict:
 
 async def call_tool_http(tool_name: str, arguments: dict) -> dict:
     try:
+        logger.info(f"Calling MCP tool: {tool_name} with args: {arguments}")
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{MCP_SERVER_URL}/tools/call",
@@ -98,6 +99,7 @@ class MCPTool(BaseTool):
     async def _arun(self, *args, **kwargs):
         logger.info(f"Calling MCP tool: {self.tool_name} with args: {kwargs}")
         response = await call_tool_http(self.tool_name, kwargs)
+        logger.info(f"MCP tool response: {response}")
         if "error" in response:
             return json.dumps({"error": response["error"]})
         return response["output"]
@@ -503,6 +505,7 @@ async def financials_chart_node(state: State) -> Command[Literal["supervisor"]]:
     react = ReActAgent(agents_llm, [tool_map["get_financials"]], FinancialsChartStruct)
     financials_chart_agent = react.agent
     financials_chart_response = financials_chart_agent.invoke(state)
+    logger.info(f"FINANCIALS CHART NODE - Financials chart response: {financials_chart_response}")
 
     last_message = financials_chart_response["messages"][-1].content
     financials_chart_data = financials_chart_response.get("structured_response", None)
@@ -659,7 +662,9 @@ async def annual_report_node(state: State) -> Command[Literal["supervisor"]]:
         if os.path.isdir(latest_path):
             shutil.rmtree(latest_path)
         else:
-            logger.warning(f"❗ Skipping delete, not a directory: {latest_path}")
+            # Use os.remove for files instead of shutil.rmtree
+            os.remove(latest_path)
+            logger.info(f"Deleted file: {latest_path}")
         # Remove HTML tags
         soup = BeautifulSoup(content, "html.parser")
         text_only = soup.get_text()

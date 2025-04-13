@@ -577,7 +577,7 @@ def call_backend(query: str, session_id: str = "") -> Dict[str, Any]:
         response = requests.post(
             f"{API_URL}/chat",
             json=payload,
-            timeout=60,  # Set a timeout of 60 seconds for longer queries
+            timeout=300,  # Set a timeout of 60 seconds for longer queries
         )
         response.raise_for_status()
 

@@ -36,7 +36,7 @@ resource "kubernetes_deployment" "frontend" {
         }
 
           command = ["gunicorn"]
-          args    = ["--timeout", "120", "-b", "0.0.0.0:8502", "ui.ui_dash:server"]
+          args    = ["--timeout", "300", "-b", "0.0.0.0:8502", "ui.ui_dash:server"]
 
         resources {
             limits = {

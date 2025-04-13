@@ -203,18 +203,16 @@ class ToolCall(BaseModel):
     arguments: Dict[str, Any]
 
 
-
 @app.post("/tools/call")
 def call_tool(call: ToolCall):
     try:
         if call.tool_name  == "get_historical_prices":
-            print(f"get_historical_prices: {call.arguments}")
             return {"output": get_historical_prices(call.arguments["ticker"], int(call.arguments["day"]))}
 
         elif call.tool_name == "get_financials":
             return {"output": get_financials(call.arguments["ticker"])}
 
-        elif tool_name == "get_macroeconomic_series":
+        elif call.tool_name == "get_macroeconomic_series":
             return {
                 "output": get_macroeconomic_series(
                     call.arguments["macro_indicator"],
@@ -233,7 +231,7 @@ def call_tool(call: ToolCall):
         return {"error": str(e)}
 
 def main():
-    """Entry point for running MCP Server via Fat   """
+    """Entry point for running MCP Server via FastAPI"""
     logger.info("Starting MCP server")
     return app
 

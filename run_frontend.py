@@ -4,4 +4,4 @@ import sys
 
 
 def main():
-    subprocess.run(["gunicorn", "ui.ui_dash:server", "--bind", "0.0.0.0:8502"])
+    subprocess.run(["gunicorn", "ui.ui_dash:server", "--timeout", "300","--bind", "0.0.0.0:8502"])
