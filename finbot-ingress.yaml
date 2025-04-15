@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: finbot-ingress
+  annotations:
+    networking.gke.io/managed-certificates: finbot-cert
+spec:
+  rules:
+    - host: finbout.cloud
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: finbot-frontend
+                port:
+                  number: 80
