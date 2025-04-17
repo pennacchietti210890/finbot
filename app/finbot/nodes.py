@@ -194,7 +194,8 @@ def make_supervisor_node(llm: BaseChatModel, members: list[str]) -> StateGraph:
     5. ONLY proceed to the next worker if it's truly necessary to complete the user's request.
     6. If the user's request is about a different stock from what has been asked in the previous request, re-start the workflow with the new stock ticker.
     7. If no more workers are needed or the request has been addressed, respond with FINISH.
-    8. If the user's request is outside the scope of this financial assistant's capabilities or cannot be processed with available tools, respond with INVALID_QUERY.
+    8. If the user is asking a follow up question, respond with general_comment.
+    9. ONLY choose INVALID QUERY when the user's request is completely outside the scope of this financial assistant. 
     
     Current workers: {workers}
     """
@@ -708,6 +709,25 @@ async def annual_report_node(state: State) -> Command[Literal["supervisor"]]:
                     "role": "assistant",
                     "content": rag_response.response,
                     "name": "annual_report",
+                }
+            ],
+        },
+        goto="supervisor",
+    )
+
+
+async def general_comment_node(state: State) -> Command[Literal["supervisor"]]:
+    logger.info("GENERAL COMMENT NODE - Processing request")
+
+    response = await agents_llm.ainvoke(state["messages"])
+    
+    return Command(
+        update={
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": response.content,
+                    "name": "geeral_comment",
                 }
             ],
         },
