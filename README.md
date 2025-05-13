@@ -1,55 +1,44 @@
-# FinBot - Financial Information Chatbot
+# FinBot 
 
-FinBot is an AI-powered chatbot that provides financial information around companies or macroeconomic indicators. It uses a set of tools to fetch relevant data and provide responses to users query. Tools rely mostly on free API, libraries such as yfinance for stock price data and listed company financial metrics, FRED API for macroeconomic data, Edagrd downloader for 10ks (publicly listed companies annual report data) and Tavily (non free) API for news.  
+FinBot is an LLM-powered chatbot that provides financial information around companies or macroeconomic indicators. It uses a set of tools to fetch relevant data and provide responses to users query. Tools rely mostly on free API, libraries such as yfinance for stock price data and listed company financial metrics, FRED API for macroeconomic data, Edgard downloader for 10ks (publicly listed companies annual report data) and Tavily (non free) API for news.  
 
 ## UI Preview
 
-![FinBot Application UI Preview](images/ui_preview_1.png)
-![FinBot Application UI Preview](images/ui_preview_2.png)
+[![Watch the demo](images/demo-thumbnail.png)](https://youtu.be/fJ11fHgllRM)
 
-## Project Structure
+## Agent architecture
+
+The below diagram summarizes the agentic pattern followed by this app: a supervisor delegating tasks to independent nodes, each a ReAct agent with its own set of tools.
+
+![FinBot Application UI Preview](images/agentic_workflows.png)
+
+## Which LLM can I use?
+
+Given the heavy reliance on tool calling functionalities, the selected LLM should have reasonably high score at it. Leaderboard for tool calling can be found here: []
+LLMs are currently called via the Langchain ChatBase Model interface, hence you if you wish to adapt to whatever LLM you like you can change the following lines of codes throughout in the code:
+
+Change this
+```
+finbot_graph = create_graph(
+      LLMService(
+         llm_provider="openai",
+         model_name="gpt-4o-mini",
+         api_key=os.getenv("OPENAI_API_KEY"),
+      ).client
+)
+```
+to:
 
 ```
-finbot/
-├── app/
-│   ├── __init__.py
-│   ├── main.py          # FastAPI backend application
-│   ├── finbot/          # LangGraph agentic workflow
-│   │   ├── graphs.py    # LangGraph structure
-│   │   ├── nodes.py     # Graph nodes 
-│   │   ├── services.py  # Singleton services (LLM, RAG engines)
-│   │   ├── mcp_agents.py # MCP-compatible agents
-│   │   ├── test_mcp_client.py # Test client for MCP
-│   │   └── mcp_finbot/   # MCP integration
-│   │       ├── mcp_tools.py        # MCP-compatible tools
-│   │       └── mcp_servers_finbot.py # MCP server configuration
-│   └── llm/             # LLM-related utilities
-│       ├── __init__.py  # Package initialization
-│       ├── llm_service.py  # LLM provider management
-│       ├── rag_query_engine.py # RAG implementation for annual reports
-│       └── groq.py      # Groq API integration
-├── ui/
-│   ├── __init__.py
-│   ├── ui_dash.py       # Dash application with cyberpunk UI
-├── tests/               # Test directory
-│   ├── conftest.py      # Pytest fixtures and configuration
-│   ├── unit/            # Unit tests
-│   │   ├── test_supervisor_node.py
-│   │   ├── test_stock_price_nodes.py
-│   │   ├── test_rag_engine_service.py
-│   │   ├── test_annual_report_node.py
-│   │   ├── test_mcp_tools.py
-│   │   └── test_mcp_server.py
-│   └── functional/      # Functional tests
-│       └── test_graph_workflow.py
-├── images/              # UI images and screenshots
-├── logs/                # Application logs directory
-├── run_frontend.py      # Frontend runner script
-├── pyproject.toml       # Poetry configuration and dependencies
-├── requirements.txt     # Plain pip requirements file
-├── .env.example         # Example environment variables
-└── README.md            # This file
+finbot_graph = create_graph(
+      LLMService(
+         llm_provider="ANTHROPIC/GROQ",
+         model_name="claude/llama",
+         api_key=os.getenv("CHOSEN_LLM_API_KEY"),
+      ).client
+)
 ```
+The LLM service class accepts OPENAI / ANTHROPIC / GROQ as model providers but is of course extendible depending on what model LangChain Chat Base model support.
 
 ## Setup
 
@@ -76,6 +65,12 @@ finbot/
    ```
    # For OpenAI
    OPENAI_API_KEY=your_openai_api_key
+   
+   # For Tavily News
+   TAVILY_API_KEY=your_tavily_api_key
+   
+   # For Fred Macro Economics data
+   FRED_API_KEY=your_fred_api_key
    ```
 
 4. Install dependencies using Poetry:
@@ -100,8 +95,15 @@ The API will be available at `http://localhost:8000`.
 ```bash
 poetry run start-frontend
 ```
-
 The Dash app will be available at `http://localhost:8502`.
+
+
+### Running the MCP server
+
+```bash
+poetry run start-mcp
+```
+The MCP API will be available at `http://localhost:5005`.
 
 ## Development with Poetry
 
