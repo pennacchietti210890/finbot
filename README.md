@@ -2,7 +2,7 @@
 
 FinBot is an LLM-powered chatbot that provides financial information around companies or macroeconomic indicators. It uses a set of tools to fetch relevant data and provide responses to users query. Tools rely mostly on free API, libraries such as yfinance for stock price data and listed company financial metrics, FRED API for macroeconomic data, Edgard downloader for 10ks (publicly listed companies annual report data) and Tavily (non free) API for news.  
 
-## UI Preview
+## UI Preview (click YT thumbnail)
 
 [![Watch the demo](https://img.youtube.com/vi/fJ11fHgllRM/0.jpg)](https://www.youtube.com/watch?v=fJ11fHgllRM)
 
@@ -16,7 +16,7 @@ The below diagram summarizes the agentic pattern followed by this app: a supervi
 
 Given the heavy reliance on tool calling functionalities, the selected LLM should have reasonably high score at it. Leaderboard for tool calling can be found here: 
 
-[https://gorilla.cs.berkeley.edu/leaderboard.html]
+https://gorilla.cs.berkeley.edu/leaderboard.html
 
 LLMs are currently called via the Langchain ChatBase Model interface, hence you if you wish to adapt to whatever LLM you like you can change the following lines of codes throughout in the code:
 
