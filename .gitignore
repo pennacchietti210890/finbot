@@ -52,3 +52,13 @@ infra/terraform.tfstate
 .terraformrc
 terraform.rc
 .terraform.lock.hcl
+
+# Specific app files
+finbot-cert.yaml
+finbot-ingress.yaml
+finbot-service.yaml
+finbot-deployment.yaml
+finbot-secret.yaml
+finbot-configmap.yaml
+finbot-job.yaml
+finbot-job.yaml
