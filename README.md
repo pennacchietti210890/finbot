@@ -4,7 +4,7 @@ FinBot is an LLM-powered chatbot that provides financial information around comp
 
 ## UI Preview
 
-[![Watch the demo](images/demo-thumbnail.png)](https://youtu.be/fJ11fHgllRM)
+[![Watch the demo](https://img.youtube.com/vi/fJ11fHgllRM/0.jpg)](https://www.youtube.com/watch?v=fJ11fHgllRM)
 
 ## Agent architecture
 
@@ -14,7 +14,10 @@ The below diagram summarizes the agentic pattern followed by this app: a supervi
 
 ## Which LLM can I use?
 
-Given the heavy reliance on tool calling functionalities, the selected LLM should have reasonably high score at it. Leaderboard for tool calling can be found here: []
+Given the heavy reliance on tool calling functionalities, the selected LLM should have reasonably high score at it. Leaderboard for tool calling can be found here: 
+
+[https://gorilla.cs.berkeley.edu/leaderboard.html]
+
 LLMs are currently called via the Langchain ChatBase Model interface, hence you if you wish to adapt to whatever LLM you like you can change the following lines of codes throughout in the code:
 
 Change this
